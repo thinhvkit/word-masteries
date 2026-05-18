@@ -1,0 +1,104 @@
+name: Build & Deploy Web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.6.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot binary + export templates
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot ~/.local/share/godot/export_templates
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          chmod +x ~/godot/godot
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o /tmp/templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q -j /tmp/templates.tpz -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Pre-import resources
+        run: |
+          ~/godot/godot --headless --path . --import || true
+
+      - name: Export Web build
+        run: |
+          mkdir -p build/web
+          ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
+
+      - name: Inject COI service worker (enables SharedArrayBuffer on GH Pages)
+        run: |
+          cat > build/web/coi-serviceworker.js <<'EOF'
+          /*! coi-serviceworker — MIT, gzuidhof/coi-serviceworker */
+          (() => {
+            if (typeof window === "undefined") {
+              self.addEventListener("install", () => self.skipWaiting());
+              self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+              self.addEventListener("fetch", (event) => {
+                if (event.request.cache === "only-if-cached" && event.request.mode !== "same-origin") return;
+                event.respondWith(fetch(event.request).then((r) => {
+                  if (r.status === 0) return r;
+                  const h = new Headers(r.headers);
+                  h.set("Cross-Origin-Embedder-Policy", "require-corp");
+                  h.set("Cross-Origin-Opener-Policy", "same-origin");
+                  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+                }).catch((e) => console.error(e)));
+              });
+              return;
+            }
+            const n = navigator;
+            if (!n.serviceWorker) return;
+            n.serviceWorker.register(window.document.currentScript.src).then(
+              (reg) => {
+                reg.addEventListener("updatefound", () => window.location.reload());
+                if (reg.active && !n.serviceWorker.controller) window.location.reload();
+              },
+              (err) => console.error("COI SW failed:", err)
+            );
+          })();
+          EOF
+          # Insert the script tag before the Godot loader.
+          sed -i 's|<script src="index.js"></script>|<script src="coi-serviceworker.js"></script>\n\t\t<script src="index.js"></script>|' build/web/index.html
+          # Disable Jekyll so files starting with `_` are served.
+          touch build/web/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
