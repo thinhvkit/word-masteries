@@ -1,0 +1,19 @@
+# Godot 4 engine cache / generated artifacts
+.godot/
+.import/
+*.translation
+
+# Export output
+build/
+
+# macOS noise
+.DS_Store
+
+# Design handoff zips (regenerable; large binaries)
+Masteries-handoff.zip
+Masteries_handoff/
+Masteries_assets/
+
+# Editor temp / swap files
+*.swp
+*~

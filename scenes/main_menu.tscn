@@ -1,0 +1,67 @@
+[gd_scene load_steps=4 format=3 uid="uid://bmainmenu1"]
+
+[ext_resource type="Script" path="res://scripts/main_menu.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/masteries_button.gd" id="2"]
+[ext_resource type="PackedScene" uid="uid://b0modebadge1" path="res://scenes/mode_badge.tscn" id="3"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="V" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 50.0
+offset_right = -20.0
+offset_bottom = -30.0
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="V"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Greet" type="Label" parent="V/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Hi"
+theme_override_font_sizes/font_size = 22
+
+[node name="XP" type="PanelContainer" parent="V/Header"]
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 4
+
+[node name="Label" type="Label" parent="V/Header/XP"]
+layout_mode = 2
+text = "0 XP"
+
+[node name="ModeBadge" parent="V" instance=ExtResource("3")]
+layout_mode = 2
+size_flags_horizontal = 0
+
+[node name="Title" type="Label" parent="V"]
+layout_mode = 2
+text = "Choose a game"
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.173, 0.173, 0.173, 1)
+
+[node name="Scroll" type="ScrollContainer" parent="V"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="V/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ChangeModeBtn" type="Button" parent="V"]
+layout_mode = 2
+text = "Change mode"
+script = ExtResource("2")
