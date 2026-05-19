@@ -1,4 +1,32 @@
 <!-- Safari / iOS PWA polish -->
+<script>
+  // Retired the COI service worker (thread_support=off, no SAB needed).
+  // Returning visitors may still have it registered — kill it on every
+  // load and purge any caches it owned. One forced reload after cleanup.
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      if (!regs.length) return;
+      Promise.all(regs.map(function (r) { return r.unregister(); }))
+        .then(function () {
+          if (window.caches && caches.keys) {
+            return caches.keys().then(function (names) {
+              return Promise.all(names.map(function (n) { return caches.delete(n); }));
+            });
+          }
+        })
+        .then(function () {
+          // Only reload if the page was actually being controlled by a SW;
+          // otherwise we'd loop on every load.
+          if (navigator.serviceWorker.controller) {
+            sessionStorage.setItem('__sw_cleaned', '1');
+            location.reload();
+          }
+        });
+    });
+  })();
+</script>
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Masteries">
