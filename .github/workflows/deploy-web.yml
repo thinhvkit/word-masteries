@@ -65,39 +65,31 @@ jobs:
               idx.write_text(html)
           PY
 
-      - name: Inject COI service worker (enables SharedArrayBuffer on GH Pages)
+      - name: Unregister legacy COI service worker
         run: |
+          # The Web preset has thread_support=false, so we don't need COOP/COEP
+          # or a service worker. But returning visitors still have the previous
+          # COI SW registered, which can put the page into a reload loop. Ship
+          # a tiny self-unregistering SW at the same path so old clients clean
+          # themselves up on the next visit.
           cat > build/web/coi-serviceworker.js <<'EOF'
-          /*! coi-serviceworker — MIT, gzuidhof/coi-serviceworker */
+          /* Self-unregister: previous deploys injected a COI SW here. */
           (() => {
             if (typeof window === "undefined") {
               self.addEventListener("install", () => self.skipWaiting());
-              self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
-              self.addEventListener("fetch", (event) => {
-                if (event.request.cache === "only-if-cached" && event.request.mode !== "same-origin") return;
-                event.respondWith(fetch(event.request).then((r) => {
-                  if (r.status === 0) return r;
-                  const h = new Headers(r.headers);
-                  h.set("Cross-Origin-Embedder-Policy", "require-corp");
-                  h.set("Cross-Origin-Opener-Policy", "same-origin");
-                  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
-                }).catch((e) => console.error(e)));
+              self.addEventListener("activate", (e) => {
+                e.waitUntil((async () => {
+                  await self.registration.unregister();
+                  const clients = await self.clients.matchAll();
+                  clients.forEach((c) => c.navigate(c.url));
+                })());
               });
               return;
             }
-            const n = navigator;
-            if (!n.serviceWorker) return;
-            n.serviceWorker.register(window.document.currentScript.src).then(
-              (reg) => {
-                reg.addEventListener("updatefound", () => window.location.reload());
-                if (reg.active && !n.serviceWorker.controller) window.location.reload();
-              },
-              (err) => console.error("COI SW failed:", err)
-            );
+            // On the page side: if a SW controls us, let it self-unregister.
+            // Don't reload from here — the SW's clients.navigate handles it.
           })();
           EOF
-          # Insert the script tag before the Godot loader.
-          sed -i 's|<script src="index.js"></script>|<script src="coi-serviceworker.js"></script>\n\t\t<script src="index.js"></script>|' build/web/index.html
           # Disable Jekyll so files starting with `_` are served.
           touch build/web/.nojekyll
 
