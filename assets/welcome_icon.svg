@@ -6,12 +6,6 @@
       <stop offset="65%"  stop-color="#ffcc66"/>
       <stop offset="100%" stop-color="#a3d98c"/>
     </linearGradient>
-    <radialGradient id="hi" cx="32%" cy="22%" r="60%">
-      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.35"/>
-      <stop offset="60%"  stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
   </defs>
-  <rect width="280" height="280" rx="62" fill="url(#g)"/>
-  <rect width="280" height="280" rx="62" fill="url(#hi)"/>
-  <text x="140" y="200" font-family="Arial Black, sans-serif" font-size="170" font-weight="900" text-anchor="middle" fill="#ffffff">M</text>
+  <text x="140" y="218" font-family="Arial Black, sans-serif" font-size="220" font-weight="900" text-anchor="middle" fill="url(#g)">M</text>
 </svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60">
+  <!-- Pencil — body, tip, eraser -->
+  <g transform="rotate(-45 30 30)">
+    <!-- Body -->
+    <rect x="18" y="26" width="20" height="8" fill="#ffffff"/>
+    <!-- Eraser tip (left) -->
+    <rect x="14" y="26" width="6" height="8" rx="2" fill="#ffffff" opacity="0.75"/>
+    <!-- Pencil tip (right) -->
+    <polygon points="38,26 46,30 38,34" fill="#ffffff"/>
+    <!-- Tip point -->
+    <polygon points="44,28 48,30 44,32" fill="#ffffff" opacity="0.6"/>
+  </g>
+</svg>

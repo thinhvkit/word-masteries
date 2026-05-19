@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- Head -->
+  <circle cx="60" cy="50" r="32" fill="#ff5577"/>
+  <!-- Body suggestion (chest feather curve) -->
+  <path d="M30,72 Q60,108 90,72 Q86,90 60,98 Q34,90 30,72 Z" fill="#ffbb44"/>
+  <!-- Wing -->
+  <ellipse cx="36" cy="74" rx="14" ry="10" fill="#44ee77" transform="rotate(-20 36 74)"/>
+  <ellipse cx="36" cy="74" rx="10" ry="6" fill="#1aa84a" transform="rotate(-20 36 74)"/>
+  <!-- Head crest -->
+  <path d="M48,22 Q52,12 56,22 M56,18 Q60,8 64,18 M64,22 Q68,12 72,22" stroke="#44aaff" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Eye -->
+  <circle cx="68" cy="46" r="6" fill="#ffffff"/>
+  <circle cx="68" cy="46" r="3" fill="#1a1a2e"/>
+  <circle cx="69" cy="45" r="1" fill="#ffffff"/>
+  <!-- Beak -->
+  <path d="M82,48 Q98,54 82,62 Q78,56 82,48 Z" fill="#ffc844"/>
+  <path d="M82,55 Q92,58 82,60" stroke="#c08818" stroke-width="1" fill="none"/>
+</svg>

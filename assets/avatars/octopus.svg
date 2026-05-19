@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- Tentacles -->
+  <g fill="#ff8faa">
+    <path d="M22,72 Q14,90 18,108 Q26,100 28,82 Z"/>
+    <path d="M36,82 Q30,104 38,114 Q44,100 44,86 Z"/>
+    <path d="M52,86 Q50,110 56,114 Q62,104 60,88 Z"/>
+    <path d="M68,86 Q70,110 64,114 Q58,104 60,88 Z"/>
+    <path d="M84,82 Q90,104 82,114 Q76,100 76,86 Z"/>
+    <path d="M98,72 Q106,90 102,108 Q94,100 92,82 Z"/>
+  </g>
+  <!-- Head/Body -->
+  <ellipse cx="60" cy="56" rx="40" ry="38" fill="#ff8faa"/>
+  <!-- Belly -->
+  <ellipse cx="60" cy="68" rx="26" ry="18" fill="#ffd0dc"/>
+  <!-- Spots -->
+  <circle cx="28" cy="38" r="3" fill="#e06a82" opacity="0.6"/>
+  <circle cx="92" cy="38" r="3" fill="#e06a82" opacity="0.6"/>
+  <circle cx="40" cy="28" r="2.5" fill="#e06a82" opacity="0.6"/>
+  <circle cx="80" cy="28" r="2.5" fill="#e06a82" opacity="0.6"/>
+  <!-- Eyes -->
+  <circle cx="46" cy="52" r="6" fill="#ffffff"/>
+  <circle cx="74" cy="52" r="6" fill="#ffffff"/>
+  <circle cx="46" cy="54" r="3.2" fill="#1a1a2e"/>
+  <circle cx="74" cy="54" r="3.2" fill="#1a1a2e"/>
+  <circle cx="47" cy="52" r="1.2" fill="#ffffff"/>
+  <circle cx="75" cy="52" r="1.2" fill="#ffffff"/>
+  <!-- Smile -->
+  <path d="M52,66 Q60,72 68,66" stroke="#a04860" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

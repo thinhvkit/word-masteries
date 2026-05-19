@@ -1,7 +1,7 @@
 extends Control
 ## Splash + Username combined (Masteries kit screens 1+2).
 
-const AVATARS := ["🦊","🦋","🐸","🦁","🦜","🐙","🐬","🐼"]
+const AVATARS := ["fox","butterfly","frog","lion","parrot","octopus","dolphin","panda"]
 const DOT_COLORS := [
 	"#6dd68a", "#ffc844", "#ff8844", "#7cc5e8",
 	"#b88adf", "#6fc8b8", "#ff8faa",
@@ -82,16 +82,31 @@ func _build_avatars() -> void:
 		_avatar_btns.append(btn)
 	_refresh_avatars()
 
-func _make_avatar(emoji: String, idx: int) -> Control:
+func _make_avatar(id: String, idx: int) -> Control:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(0, 64)
+	b.custom_minimum_size = Vector2(0, 72)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.text = emoji
-	b.add_theme_font_size_override("font_size", 28)
+	b.text = ""
 	b.focus_mode = Control.FOCUS_NONE
 	b.pressed.connect(func():
 		_avatar_idx = idx
 		_refresh_avatars())
+
+	# Centered SVG inside the button. Mouse passthrough so button receives taps.
+	var tex_path := "res://assets/avatars/%s.svg" % id
+	if ResourceLoader.exists(tex_path):
+		var icon := TextureRect.new()
+		icon.texture = load(tex_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Inset slightly so the icon doesn't kiss the border.
+		icon.offset_left = 8
+		icon.offset_top = 8
+		icon.offset_right = -8
+		icon.offset_bottom = -8
+		b.add_child(icon)
 	return b
 
 func _refresh_avatars() -> void:

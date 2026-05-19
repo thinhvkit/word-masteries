@@ -210,6 +210,8 @@ func _pill_btn(btn: Button, bg: Color, fg: Color) -> void:
 	btn.add_theme_color_override("font_color", fg)
 	btn.add_theme_color_override("font_hover_color", fg)
 	btn.add_theme_color_override("font_pressed_color", fg)
+	# Keep disabled text readable against the lightened pill background.
+	btn.add_theme_color_override("font_disabled_color", Color(fg.r, fg.g, fg.b, 0.55))
 	btn.custom_minimum_size = Vector2(0, 52)
 	btn.add_theme_stylebox_override("normal", _pill_sb(bg, bg.darkened(0.1), false))
 	btn.add_theme_stylebox_override("hover", _pill_sb(bg, bg.darkened(0.1), false))

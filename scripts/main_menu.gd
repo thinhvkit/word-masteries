@@ -1,13 +1,13 @@
 extends Control
 
 const GAMES := [
-	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 5×5 board","icon":"⚔","tag":"Battle","scene":"res://games/word_fight/intro.tscn"},
-	{"id":"word_match","name":"Word Match","desc":"Drag across circle letters — 2 minutes","icon":"◉","tag":"Drag","scene":"res://games/word_match/word_match.tscn"},
-	{"id":"word_found","name":"Word Found","desc":"Tap letters into rows, wave by wave","icon":"≡","tag":"Waves","scene":"res://games/word_found/word_found.tscn"},
-	{"id":"story_tell","name":"Story Tell","desc":"Fill blanks — AI scores your grammar","icon":"✎","tag":"AI","scene":"res://games/story_tell/story_tell.tscn"},
-	{"id":"word_type","name":"Word Type","desc":"Find every form of the given word","icon":"Aa","tag":"Grammar","scene":"res://games/word_type/word_type.tscn"},
-	{"id":"describe_picture","name":"Describe Picture","desc":"Complete sentence starters from an image","icon":"▭","tag":"Visual","scene":"res://games/describe_picture/describe_picture.tscn"},
-	{"id":"listen_dictate","name":"Listen & Dictate","desc":"Hear the word — type it correctly","icon":"♬","tag":"Audio","scene":"res://games/listen_dictate/listen_dictate.tscn"},
+	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 5×5 board","tag":"Battle","scene":"res://games/word_fight/intro.tscn"},
+	{"id":"word_match","name":"Word Match","desc":"Drag across circle letters — 2 minutes","tag":"Drag","scene":"res://games/word_match/word_match.tscn"},
+	{"id":"word_found","name":"Word Found","desc":"Tap letters into rows, wave by wave","tag":"Waves","scene":"res://games/word_found/word_found.tscn"},
+	{"id":"story_tell","name":"Story Tell","desc":"Fill blanks — AI scores your grammar","tag":"AI","scene":"res://games/story_tell/story_tell.tscn"},
+	{"id":"word_type","name":"Word Type","desc":"Find every form of the given word","tag":"Grammar","scene":"res://games/word_type/word_type.tscn"},
+	{"id":"describe_picture","name":"Describe Picture","desc":"Complete sentence starters from an image","tag":"Visual","scene":"res://games/describe_picture/describe_picture.tscn"},
+	{"id":"listen_dictate","name":"Listen & Dictate","desc":"Hear the word — type it correctly","tag":"Audio","scene":"res://games/listen_dictate/listen_dictate.tscn"},
 ]
 
 const BG := Color("#faf5ed")
@@ -170,7 +170,7 @@ func _build_row(g: Dictionary) -> Control:
 	btn.add_child(row)
 
 	# Icon block
-	var icon := _icon_block(g.icon, color, dark)
+	var icon := _icon_block(g.id, color, dark)
 	row.add_child(icon)
 
 	# Text column
@@ -197,43 +197,40 @@ func _build_row(g: Dictionary) -> Control:
 
 	return btn
 
-func _icon_block(glyph: String, color: Color, dark: Color) -> Control:
+func _icon_block(game_id: String, color: Color, dark: Color) -> Control:
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(52, 55)  # +3px to allow shadow
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Shadow layer underneath.
 	var bg := PanelContainer.new()
 	bg.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	bg.size = Vector2(52, 52)
 	bg.position = Vector2(0, 3)
-	# Shadow layer
 	var shadow_sb := StyleBoxFlat.new()
 	shadow_sb.bg_color = dark
-	shadow_sb.corner_radius_top_left = 15
-	shadow_sb.corner_radius_top_right = 15
-	shadow_sb.corner_radius_bottom_left = 15
-	shadow_sb.corner_radius_bottom_right = 15
+	shadow_sb.set_corner_radius_all(15)
 	bg.add_theme_stylebox_override("panel", shadow_sb)
 	holder.add_child(bg)
+	# Colored top layer.
 	var top := PanelContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	top.size = Vector2(52, 52)
 	top.position = Vector2.ZERO
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = color
-	sb.corner_radius_top_left = 15
-	sb.corner_radius_top_right = 15
-	sb.corner_radius_bottom_left = 15
-	sb.corner_radius_bottom_right = 15
+	sb.set_corner_radius_all(15)
 	top.add_theme_stylebox_override("panel", sb)
 	holder.add_child(top)
-	var glyph_lbl := Label.new()
-	glyph_lbl.text = glyph
-	glyph_lbl.add_theme_font_size_override("font_size", 22)
-	glyph_lbl.add_theme_color_override("font_color", Color.WHITE)
-	glyph_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyph_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	glyph_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	top.add_child(glyph_lbl)
+	# White glyph icon (SVG).
+	var tex_path := "res://assets/games/%s.svg" % game_id
+	if ResourceLoader.exists(tex_path):
+		var icon := TextureRect.new()
+		icon.texture = load(tex_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		top.add_child(icon)
 	return holder
 
 func _tag_pill(text: String, light: Color, dark: Color) -> Control:

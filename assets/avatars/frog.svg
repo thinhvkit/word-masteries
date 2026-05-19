@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- Head -->
+  <ellipse cx="60" cy="68" rx="44" ry="36" fill="#6dd68a"/>
+  <!-- Belly highlight -->
+  <ellipse cx="60" cy="84" rx="28" ry="14" fill="#bff0c8"/>
+  <!-- Eye bulges -->
+  <circle cx="38" cy="36" r="14" fill="#6dd68a"/>
+  <circle cx="82" cy="36" r="14" fill="#6dd68a"/>
+  <!-- Eyes -->
+  <circle cx="38" cy="36" r="9" fill="#ffffff"/>
+  <circle cx="82" cy="36" r="9" fill="#ffffff"/>
+  <circle cx="38" cy="38" r="5" fill="#1a3010"/>
+  <circle cx="82" cy="38" r="5" fill="#1a3010"/>
+  <circle cx="40" cy="36" r="1.6" fill="#ffffff"/>
+  <circle cx="84" cy="36" r="1.6" fill="#ffffff"/>
+  <!-- Mouth -->
+  <path d="M30,72 Q60,92 90,72" stroke="#3a6620" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Cheek dots -->
+  <circle cx="24" cy="68" r="3" fill="#ffb0c0" opacity="0.7"/>
+  <circle cx="96" cy="68" r="3" fill="#ffb0c0" opacity="0.7"/>
+</svg>

@@ -59,7 +59,9 @@ func _draw() -> void:
 	var f := ThemeDB.fallback_font
 	var fs := 24
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
-	draw_string(f, size * 0.5 - ts * 0.5 + Vector2(0, fs * 0.36),
+	var ascent := f.get_ascent(fs)
+	var descent := f.get_descent(fs)
+	draw_string(f, Vector2(size.x * 0.5 - ts.x * 0.5, (size.y + ascent - descent) * 0.5),
 		letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, ink)
 
 func _round_rect(rect: Rect2, color: Color, radius: float) -> void:

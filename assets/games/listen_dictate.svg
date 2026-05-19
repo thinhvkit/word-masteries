@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60">
+  <!-- Eighth-note pair -->
+  <!-- Stems -->
+  <line x1="22" y1="42" x2="22" y2="16" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="40" y1="42" x2="40" y2="16" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <!-- Beam connecting tops -->
+  <path d="M22,16 L40,12 L40,20 L22,24 Z" fill="#ffffff"/>
+  <!-- Note heads -->
+  <ellipse cx="20" cy="42" rx="6" ry="4.5" fill="#ffffff" transform="rotate(-20 20 42)"/>
+  <ellipse cx="38" cy="42" rx="6" ry="4.5" fill="#ffffff" transform="rotate(-20 38 42)"/>
+</svg>

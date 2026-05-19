@@ -52,5 +52,7 @@ func _draw_letter(center: Vector2, col: Color) -> void:
 	var f := ThemeDB.fallback_font
 	var fs := 28
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
-	draw_string(f, center - ts * 0.5 + Vector2(0, fs * 0.36),
+	var ascent := f.get_ascent(fs)
+	var descent := f.get_descent(fs)
+	draw_string(f, Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5),
 		letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
