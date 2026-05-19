@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280" viewBox="0 0 280 280">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#ffb0b0"/>
+      <stop offset="35%"  stop-color="#ffac6e"/>
+      <stop offset="65%"  stop-color="#ffcc66"/>
+      <stop offset="100%" stop-color="#a3d98c"/>
+    </linearGradient>
+    <radialGradient id="hi" cx="32%" cy="22%" r="60%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="60%"  stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="280" height="280" rx="62" fill="url(#g)"/>
+  <rect width="280" height="280" rx="62" fill="url(#hi)"/>
+  <text x="140" y="200" font-family="Arial Black, sans-serif" font-size="170" font-weight="900" text-anchor="middle" fill="#ffffff">M</text>
+</svg>

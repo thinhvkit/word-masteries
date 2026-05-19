@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <radialGradient id="rbCloud" cx="45%" cy="38%" r="58%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="55%"  stop-color="#e8f4ff"/>
+      <stop offset="100%" stop-color="#c8e4f8"/>
+    </radialGradient>
+    <linearGradient id="rbCloudShadow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#c8dcf0" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#8cb4dc" stop-opacity="0.5"/>
+    </linearGradient>
+    <radialGradient id="rbGlow" cx="50%" cy="90%" r="70%">
+      <stop offset="0%"   stop-color="#b464ff" stop-opacity="0.3"/>
+      <stop offset="50%"  stop-color="#6496ff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#6496ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="rbBloom">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Magic glow behind arc -->
+  <ellipse cx="60" cy="96" rx="50" ry="32" fill="url(#rbGlow)"/>
+
+  <!-- Rainbow arc — 5 thick candy bands -->
+  <g filter="url(#rbBloom)">
+    <!-- Shadow arc -->
+    <path d="M12,94 A44,44 0 0,1 108,94"
+      fill="none" stroke="black" stroke-opacity="0.3" stroke-width="38"
+      stroke-linecap="round" transform="translate(0,4)"/>
+
+    <!-- Red/Pink (outer) -->
+    <path d="M12,94 A44,44 0 0,1 108,94"
+      fill="none" stroke="#ff5577" stroke-width="11" stroke-linecap="round"/>
+    <path d="M12,94 A44,44 0 0,1 108,94"
+      fill="none" stroke="white" stroke-opacity="0.28" stroke-width="4"
+      stroke-linecap="round" transform="translate(0,-2.5)"/>
+
+    <!-- Orange -->
+    <path d="M19,94 A38,38 0 0,1 101,94"
+      fill="none" stroke="#ff9944" stroke-width="10" stroke-linecap="round"/>
+    <path d="M19,94 A38,38 0 0,1 101,94"
+      fill="none" stroke="white" stroke-opacity="0.24" stroke-width="3.5"
+      stroke-linecap="round" transform="translate(0,-2)"/>
+
+    <!-- Yellow -->
+    <path d="M26,94 A32,32 0 0,1 94,94"
+      fill="none" stroke="#ffee22" stroke-width="9" stroke-linecap="round"/>
+    <path d="M26,94 A32,32 0 0,1 94,94"
+      fill="none" stroke="white" stroke-opacity="0.28" stroke-width="3"
+      stroke-linecap="round" transform="translate(0,-2)"/>
+
+    <!-- Green -->
+    <path d="M33,94 A26,26 0 0,1 87,94"
+      fill="none" stroke="#44ee77" stroke-width="9" stroke-linecap="round"/>
+    <path d="M33,94 A26,26 0 0,1 87,94"
+      fill="none" stroke="white" stroke-opacity="0.24" stroke-width="3"
+      stroke-linecap="round" transform="translate(0,-2)"/>
+
+    <!-- Blue (inner) -->
+    <path d="M40,94 A20,20 0 0,1 80,94"
+      fill="none" stroke="#44aaff" stroke-width="9" stroke-linecap="round"/>
+    <path d="M40,94 A20,20 0 0,1 80,94"
+      fill="none" stroke="white" stroke-opacity="0.3" stroke-width="3"
+      stroke-linecap="round" transform="translate(0,-2)"/>
+  </g>
+
+  <!-- Left cloud -->
+  <g filter="url(#rbBloom)">
+    <circle cx="22" cy="90" r="12" fill="#aac8e0" opacity="0.2" transform="translate(0,3)"/>
+    <circle cx="22" cy="88" r="12" fill="url(#rbCloud)"/>
+    <circle cx="14" cy="91" r="9"  fill="url(#rbCloud)"/>
+    <circle cx="28" cy="93" r="9"  fill="url(#rbCloud)"/>
+    <rect x="8" y="91" width="26" height="12" fill="url(#rbCloud)"/>
+    <rect x="8" y="95" width="26" height="8" rx="4" fill="url(#rbCloudShadow)" opacity="0.6"/>
+    <circle cx="18" cy="86" r="5" fill="white" opacity="0.55"/>
+    <circle cx="18" cy="86" r="2.2" fill="white" opacity="0.8"/>
+  </g>
+
+  <!-- Right cloud -->
+  <g filter="url(#rbBloom)">
+    <circle cx="98" cy="90" r="12" fill="#aac8e0" opacity="0.2" transform="translate(0,3)"/>
+    <circle cx="98" cy="88" r="12" fill="url(#rbCloud)"/>
+    <circle cx="106" cy="91" r="9" fill="url(#rbCloud)"/>
+    <circle cx="92" cy="93" r="9"  fill="url(#rbCloud)"/>
+    <rect x="86" y="91" width="26" height="12" fill="url(#rbCloud)"/>
+    <rect x="86" y="95" width="26" height="8" rx="4" fill="url(#rbCloudShadow)" opacity="0.6"/>
+    <circle cx="102" cy="86" r="5" fill="white" opacity="0.55"/>
+    <circle cx="102" cy="86" r="2.2" fill="white" opacity="0.8"/>
+  </g>
+
+  <!-- Magic sparkle dust -->
+  <g fill="white">
+    <path d="M56,18 L58,24 L64,26 L58,28 L56,34 L54,28 L48,26 L54,24 Z" opacity="0.85"/>
+    <path d="M78,22 L79.5,26 L84,27.5 L79.5,29 L78,33 L76.5,29 L72,27.5 L76.5,26 Z" opacity="0.7"/>
+    <path d="M22,44 L23,47 L26,47.5 L23,48 L22,51 L21,48 L18,47.5 L21,47 Z" opacity="0.6"/>
+    <path d="M92,48 L93,51 L96,51.5 L93,52 L92,55 L91,52 L88,51.5 L91,51 Z" opacity="0.55"/>
+    <path d="M38,28 L38.8,30.5 L41.5,31 L38.8,31.5 L38,34 L37.2,31.5 L34.5,31 L37.2,30.5 Z" opacity="0.5"/>
+  </g>
+
+  <!-- Colored sparkle dots matching arc colors -->
+  <g>
+    <circle cx="11" cy="77"  r="2.5" fill="#ff5577" opacity="0.75"/>
+    <circle cx="11" cy="77"  r="1.1" fill="white"   opacity="0.9"/>
+    <circle cx="109" cy="77" r="2.5" fill="#44aaff"  opacity="0.75"/>
+    <circle cx="109" cy="77" r="1.1" fill="white"    opacity="0.9"/>
+    <circle cx="55"  cy="52" r="2"   fill="#44ee77"  opacity="0.65"/>
+    <circle cx="55"  cy="52" r="0.9" fill="white"    opacity="0.85"/>
+    <circle cx="68"  cy="42" r="1.8" fill="#ffee22"  opacity="0.6"/>
+    <circle cx="42"  cy="42" r="1.8" fill="#ff9944"  opacity="0.6"/>
+  </g>
+
+  <!-- Heart -->
+  <g fill="#ff8cba" opacity="0.5">
+    <path d="M56,36 C56,34 59,32 59,35 C59,32 62,34 62,36 C62,39 59,41 59,41 C59,41 56,39 56,36 Z" transform="scale(0.8) translate(14,6)"/>
+  </g>
+</svg>

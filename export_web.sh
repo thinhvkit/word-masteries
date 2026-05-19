@@ -46,6 +46,22 @@ esac
 echo "Exporting Masteries [$mode] -> $OUT_DIR/index.html"
 "$GODOT" --headless --path "$PROJECT_DIR" $flag "$PRESET" "$OUT_DIR/index.html"
 
+# Inject Safari/iOS polish (custom meta tags + safe-area CSS) after <head>.
+# Godot's html/head_include field expects literal HTML, not a file path, so we
+# splice it in as a post-export step.
+HEAD_INCLUDE="$PROJECT_DIR/html/safari-head-include.html"
+if [[ -f "$HEAD_INCLUDE" ]]; then
+  python3 - "$OUT_DIR/index.html" "$HEAD_INCLUDE" <<'PY'
+import sys, pathlib
+idx_path = pathlib.Path(sys.argv[1])
+head = pathlib.Path(sys.argv[2]).read_text()
+html = idx_path.read_text()
+if "<!-- Safari / iOS PWA polish -->" not in html:
+    html = html.replace("<head>", "<head>\n" + head, 1)
+    idx_path.write_text(html)
+PY
+fi
+
 # Drop a _headers file (Netlify / Cloudflare Pages format) enabling
 # SharedArrayBuffer so the worker-thread enemy AI runs threaded.
 cat > "$OUT_DIR/_headers" <<'EOF'

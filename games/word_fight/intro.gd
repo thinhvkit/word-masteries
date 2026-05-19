@@ -2,16 +2,25 @@ extends Control
 ## Word Fight — Pre-Battle intro. Shows round, you-vs-enemy, topic.
 
 const Topics := preload("res://games/word_fight/topics.gd")
-const UI := preload("res://scripts/results_ui.gd")
+const Chrome := preload("res://scripts/screen_chrome.gd")
 
 # Enemy roster mirrors word_fight.gd. Kept here so intro can render
 # before instantiating the gameplay scene.
 const ENEMIES := [
-	{"name": "Wriggles Jr.", "hp": 80},
-	{"name": "Spelluga",     "hp": 120},
-	{"name": "Verbosaur",    "hp": 160},
-	{"name": "Lexigon",      "hp": 220},
+	{"name": "Wriggles Jr.", "hp": 80,  "emoji": "🐛"},
+	{"name": "Spelluga",     "hp": 120, "emoji": "🐢"},
+	{"name": "Verbosaur",    "hp": 160, "emoji": "🦖"},
+	{"name": "Lexigon",      "hp": 220, "emoji": "🐉"},
 ]
+
+const PLAYER_EMOJI := "🦋"
+const SAGE := Color("#a7d99a")
+const PINK := Color("#e07a8c")
+const PINK_DARK := Color("#c95e74")
+const GOLD_BG := Color("#fff1c4")
+const GOLD_BORDER := Color("#f0d890")
+const CORAL_LIGHT := Color("#ffdcc7")
+const CORAL_DARK := Color("#c95a1f")
 
 func _ready() -> void:
 	# Reset session counters for a fresh battle.
@@ -30,70 +39,133 @@ func _ready() -> void:
 	GameState.wf_session["enemy_max_hp"] = int(enemy.hp)
 	GameState.wf_session["topic"] = topic
 
-	_build_ui(idx + 1, enemy.name, topic)
+	_build_ui(idx + 1, enemy, topic)
 
-func _build_ui(round_num: int, enemy_name: String, topic: String) -> void:
-	UI.bg_layer(self, Palette.BG)
-
-	var back_btn := Button.new()
-	back_btn.text = "← Back"
-	back_btn.position = Vector2(12, 12)
-	back_btn.size = Vector2(80, 32)
-	back_btn.pressed.connect(_on_back)
-	add_child(back_btn)
+func _build_ui(round_num: int, enemy: Dictionary, topic: String) -> void:
+	Chrome.bg_layer(self)
+	var back := Chrome.header(self, "Word Fight", "word_fight", CORAL_LIGHT, CORAL_DARK)
+	back.pressed.connect(_on_back)
 
 	var body := VBoxContainer.new()
+	body.anchor_left = 0.0
 	body.anchor_right = 1.0
+	body.anchor_top = 0.0
 	body.anchor_bottom = 1.0
-	body.offset_left = 24
-	body.offset_top = 60
-	body.offset_right = -24
-	body.offset_bottom = -32
+	body.offset_left = 28
+	body.offset_top = Chrome.HEADER_H + 24
+	body.offset_right = -28
+	body.offset_bottom = -28
 	body.alignment = BoxContainer.ALIGNMENT_CENTER
-	body.add_theme_constant_override("separation", 24)
+	body.add_theme_constant_override("separation", 18)
 	add_child(body)
 
-	body.add_child(UI.center_label("Round %d" % round_num, 28, Palette.TEXT))
+	var round_lbl := Label.new()
+	round_lbl.text = "Round %d" % round_num
+	round_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	round_lbl.add_theme_font_size_override("font_size", 28)
+	round_lbl.add_theme_color_override("font_color", Chrome.TEXT)
+	body.add_child(round_lbl)
 
-	# VS row
+	# VS row.
 	var vs := HBoxContainer.new()
 	vs.alignment = BoxContainer.ALIGNMENT_CENTER
-	vs.add_theme_constant_override("separation", 24)
-	vs.add_child(_avatar(GameState.player_name if GameState.player_name != "" else "You", Palette.SAGE))
-	vs.add_child(UI.center_label("VS", 32, Palette.TEXT_SECONDARY))
-	vs.add_child(_avatar(enemy_name, Palette.TERRACOTTA))
+	vs.add_theme_constant_override("separation", 28)
+	var player_name := GameState.player_name if GameState.player_name != "" else "You"
+	vs.add_child(_avatar(player_name, PLAYER_EMOJI, SAGE))
+	var vs_lbl := Label.new()
+	vs_lbl.text = "VS"
+	vs_lbl.add_theme_font_size_override("font_size", 24)
+	vs_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	vs.add_child(vs_lbl)
+	vs.add_child(_avatar(enemy.name, enemy.emoji, PINK))
 	body.add_child(vs)
 
-	# Topic card
-	var topic_card := UI.card(Color("#fff1c4"), Palette.GOLD_DARK, 12, 16)
-	var topic_box := VBoxContainer.new()
-	topic_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	topic_box.add_child(UI.center_label("Topic", 14, Palette.TEXT_SECONDARY))
-	topic_box.add_child(UI.center_label(topic.capitalize(), 24, Palette.TEXT))
-	topic_card.add_child(topic_box)
-	body.add_child(topic_card)
+	body.add_child(_topic_card(topic))
 
-	body.add_child(UI.center_label("Words matching the topic deal ×2 damage!", 14, Palette.TEXT_SECONDARY))
+	var hint := Label.new()
+	hint.text = "Words matching the topic deal ×2 damage!"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	body.add_child(hint)
 
-	var start_btn := UI.primary_btn("Start Battle!")
-	start_btn.pressed.connect(_on_start)
-	body.add_child(start_btn)
+	var start := Chrome.pill_button("Start Battle!", PINK)
+	start.custom_minimum_size = Vector2(0, 60)
+	start.pressed.connect(_on_start)
+	body.add_child(start)
 
-func _avatar(name: String, color: Color) -> Control:
+	# Push body content toward vertical center.
+	body.add_child(_flex())
+
+func _avatar(name: String, emoji: String, bg: Color) -> Control:
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	var circle := PanelContainer.new()
+	box.add_theme_constant_override("separation", 6)
+
+	var circle := Panel.new()
+	circle.custom_minimum_size = Vector2(72, 72)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = color
-	sb.corner_radius_top_left = 32
-	sb.corner_radius_top_right = 32
-	sb.corner_radius_bottom_left = 32
-	sb.corner_radius_bottom_right = 32
+	sb.bg_color = bg
+	sb.set_corner_radius_all(36)
+	sb.shadow_color = Color(0, 0, 0, 0.10)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2i(0, 2)
 	circle.add_theme_stylebox_override("panel", sb)
-	circle.custom_minimum_size = Vector2(64, 64)
 	box.add_child(circle)
-	box.add_child(UI.center_label(name, 14, Palette.TEXT))
+
+	var emoji_lbl := Label.new()
+	emoji_lbl.text = emoji
+	emoji_lbl.add_theme_font_size_override("font_size", 34)
+	emoji_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	emoji_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	emoji_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	circle.add_child(emoji_lbl)
+
+	var name_lbl := Label.new()
+	name_lbl.text = name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_color_override("font_color", Chrome.TEXT)
+	box.add_child(name_lbl)
 	return box
+
+func _topic_card(topic: String) -> Control:
+	var holder := CenterContainer.new()
+	var p := PanelContainer.new()
+	p.custom_minimum_size = Vector2(180, 0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = GOLD_BG
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2)
+	sb.border_color = GOLD_BORDER
+	sb.content_margin_left = 24
+	sb.content_margin_right = 24
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 14
+	p.add_theme_stylebox_override("panel", sb)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 2)
+	var head := Label.new()
+	head.text = "Topic"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 12)
+	head.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	box.add_child(head)
+	var t := Label.new()
+	t.text = topic.capitalize()
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 22)
+	t.add_theme_color_override("font_color", Chrome.TEXT)
+	box.add_child(t)
+	p.add_child(box)
+	holder.add_child(p)
+	return holder
+
+func _flex() -> Control:
+	var c := Control.new()
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return c
 
 func _on_back() -> void:
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")

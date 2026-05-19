@@ -82,11 +82,15 @@ func _draw() -> void:
 			var inset := 2.0 + i * 1.2
 			_round_rect_outline(rect.grow(-inset), colors[i], maxf(RADIUS - inset, 2), 1.4)
 
-	# Letter
+	# Letter — center horizontally by string width, vertically using the font's
+	# ascent so the cap-height sits on the visual middle (baseline anchored).
 	var f := ThemeDB.fallback_font
 	var fs := 26
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
-	draw_string(f, size * 0.5 - ts * 0.5 + Vector2(0, fs * 0.36),
+	var ascent := f.get_ascent(fs)
+	var descent := f.get_descent(fs)
+	var y := (size.y + ascent - descent) * 0.5
+	draw_string(f, Vector2(size.x * 0.5 - ts.x * 0.5, y),
 		letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, text_col)
 
 	# Order chip — small badge in top-right corner with a pink ring.
@@ -97,7 +101,9 @@ func _draw() -> void:
 		var num := str(selected_order + 1)
 		var chip_fs := 10
 		var ns := f.get_string_size(num, HORIZONTAL_ALIGNMENT_CENTER, -1, chip_fs)
-		draw_string(f, chip_pos - ns * 0.5 + Vector2(0, chip_fs * 0.35),
+		var n_ascent := f.get_ascent(chip_fs)
+		var n_descent := f.get_descent(chip_fs)
+		draw_string(f, Vector2(chip_pos.x - ns.x * 0.5, chip_pos.y + (n_ascent - n_descent) * 0.5),
 			num, HORIZONTAL_ALIGNMENT_CENTER, -1, chip_fs, Palette.PINK_DARK)
 
 func _round_rect(rect: Rect2, color: Color, radius: float) -> void:

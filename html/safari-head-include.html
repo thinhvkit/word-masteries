@@ -1,0 +1,32 @@
+<!-- Safari / iOS PWA polish -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Masteries">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#faf5ed">
+<meta name="format-detection" content="telephone=no">
+
+<style>
+  /* Safari/iOS bg + safe-area handling so notch + home indicator don't crop the canvas */
+  html, body {
+    background: #faf5ed;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+            user-select: none;
+  }
+  body {
+    /* Honor iPhone safe areas so HUD / back button aren't under the notch */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* The Godot canvas — block pinch-zoom and avoid scroll bounce. */
+  canvas {
+    touch-action: none;
+    image-rendering: -webkit-optimize-contrast;
+  }
+</style>

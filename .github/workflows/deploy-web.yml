@@ -53,6 +53,18 @@ jobs:
           mkdir -p build/web
           ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
 
+      - name: Inject Safari/iOS head polish
+        run: |
+          python3 - build/web/index.html html/safari-head-include.html <<'PY'
+          import sys, pathlib
+          idx = pathlib.Path(sys.argv[1])
+          head = pathlib.Path(sys.argv[2]).read_text()
+          html = idx.read_text()
+          if "<!-- Safari / iOS PWA polish -->" not in html:
+              html = html.replace("<head>", "<head>\n" + head, 1)
+              idx.write_text(html)
+          PY
+
       - name: Inject COI service worker (enables SharedArrayBuffer on GH Pages)
         run: |
           cat > build/web/coi-serviceworker.js <<'EOF'

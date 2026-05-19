@@ -8,6 +8,19 @@ extends Control
 
 const Tile := preload("res://games/word_found/tile_node.gd")
 const TileState := Tile.State
+const Chrome := preload("res://scripts/screen_chrome.gd")
+
+const GREEN_LIGHT := Color("#dff1e0")
+const GREEN_DARK := Color("#5ba36b")
+const GOLD_LIGHT := Color("#fff1c4")
+const GOLD_DARK := Color("#b48218")
+const PURPLE_LIGHT := Color("#ece1f5")
+const PURPLE_BORDER := Color("#b89fd6")
+const PURPLE_DARK := Color("#7a4caf")
+const PINK_LIGHT := Color("#fde0e7")
+const PINK_BORDER := Color("#f2a6b6")
+const SUBMIT_GREEN := Color("#b6dfb2")
+const SUBMIT_GREEN_TEXT := Color("#4a7d4a")
 
 const MIN_WORD_LEN := 3
 const MAX_WAVE := 40                      # GDD hard ceiling
@@ -73,18 +86,152 @@ var _used_words: Dictionary = {}
 var _running: bool = false
 
 func _ready() -> void:
-	back_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
+	back_btn.visible = false  # replaced by chrome header
 	submit_btn.pressed.connect(_submit_word)
 	clear_btn.pressed.connect(_clear_chain)
-	_style_buttons()
+	_apply_design()
 	_start_wave(1)
 
-func _style_buttons() -> void:
-	Palette.style_button(submit_btn, Palette.PINK, Color.WHITE, 14)
-	Palette.style_button(clear_btn, Palette.BG_SOFT, Palette.TEXT, 14)
-	submit_btn.add_theme_font_size_override("font_size", 16)
-	clear_btn.add_theme_font_size_override("font_size", 16)
+func _apply_design() -> void:
+	Chrome.bg_layer(self)
+	var hdr_back := Chrome.header(self, "Word Found", "word_found", GREEN_LIGHT, GREEN_DARK)
+	hdr_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
+	# Body needs to clear the header band.
+	var v := $V as Control
+	v.offset_top = Chrome.HEADER_H + 12
+
+	# HUD row — replace plain labels with pill chips.
+	wave_lbl.add_theme_font_size_override("font_size", 14)
+	wave_lbl.add_theme_color_override("font_color", GREEN_DARK)
+	score_lbl.add_theme_font_size_override("font_size", 14)
+	score_lbl.add_theme_color_override("font_color", GOLD_DARK)
+	_wrap_in_chip(wave_lbl, GREEN_LIGHT)
+	_wrap_in_chip(score_lbl, GOLD_LIGHT)
+
+	# Targets section — wrap label + box in a purple card.
+	var targets_label_node: Label = $V/TargetsLabel
+	targets_label_node.add_theme_color_override("font_color", PURPLE_DARK)
+	targets_label_node.add_theme_font_size_override("font_size", 14)
+	_wrap_in_card([targets_label_node, targets_box], v, PURPLE_LIGHT, PURPLE_BORDER, 14)
+
+	# Row2: relabel + style the current-word pill (pink).
+	row2_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	row2_label.add_theme_font_size_override("font_size", 18)
+	var row2_node: Control = $V/Row2
+	# Insert caption above the pill.
+	var caption := Label.new()
+	caption.text = "Your word ↓ (tap to undo)"
+	caption.add_theme_font_size_override("font_size", 12)
+	caption.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	v.add_child(caption)
+	v.move_child(caption, row2_node.get_index())
+	# Wrap the Current label + Tiles row in a pink pill panel.
+	var pill := PanelContainer.new()
+	var pill_sb := StyleBoxFlat.new()
+	pill_sb.bg_color = PINK_LIGHT
+	pill_sb.set_corner_radius_all(20)
+	pill_sb.set_border_width_all(2)
+	pill_sb.border_color = PINK_BORDER
+	pill_sb.content_margin_left = 16
+	pill_sb.content_margin_right = 16
+	pill_sb.content_margin_top = 10
+	pill_sb.content_margin_bottom = 10
+	pill.add_theme_stylebox_override("panel", pill_sb)
+	v.add_child(pill)
+	v.move_child(pill, row2_node.get_index())
+	row2_node.reparent(pill, false)
+
+	# Row1 — caption + white card around the grid.
+	var row1_lbl: Label = $V/Row1Label
+	row1_lbl.text = "Available letters ↓ tap to use"
+	row1_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	row1_lbl.add_theme_font_size_override("font_size", 12)
+	_wrap_in_card([row1_grid], v, Chrome.SURFACE, Chrome.BORDER, 16)
+
+	# Status text styling.
+	status_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	bonus_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+
+	# Action buttons — Clear (white pill) + Submit (sage-green pill).
+	_pill_btn(clear_btn, Chrome.SURFACE, Chrome.TEXT)
+	clear_btn.add_theme_stylebox_override("normal", _pill_sb(Chrome.SURFACE, Chrome.BORDER, true))
+	clear_btn.add_theme_stylebox_override("hover", _pill_sb(Chrome.SURFACE, Chrome.BORDER, true))
+	clear_btn.add_theme_stylebox_override("pressed", _pill_sb(Chrome.BORDER, Chrome.BORDER, true))
+	_pill_btn(submit_btn, SUBMIT_GREEN, SUBMIT_GREEN_TEXT)
 	submit_btn.disabled = true
+
+func _wrap_in_chip(lbl: Label, bg: Color) -> void:
+	var parent := lbl.get_parent() as Control
+	var idx := lbl.get_index()
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(99)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 5
+	sb.content_margin_bottom = 5
+	p.add_theme_stylebox_override("panel", sb)
+	parent.add_child(p)
+	parent.move_child(p, idx)
+	lbl.reparent(p, false)
+
+func _wrap_in_card(nodes: Array, parent: Control, bg: Color, border: Color, radius: int) -> void:
+	# Wraps `nodes` (in order, already children of parent) into a single PanelContainer
+	# placed at the first node's original index.
+	if nodes.is_empty():
+		return
+	var first_idx: int = (nodes[0] as Node).get_index()
+	var card := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(radius)
+	sb.set_border_width_all(1)
+	sb.border_color = border
+	sb.shadow_color = Color(0, 0, 0, 0.05)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2i(0, 1)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	card.add_theme_stylebox_override("panel", sb)
+	parent.add_child(card)
+	parent.move_child(card, first_idx)
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 8)
+	card.add_child(inner)
+	for n: Node in nodes:
+		n.reparent(inner, false)
+
+func _pill_btn(btn: Button, bg: Color, fg: Color) -> void:
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", fg)
+	btn.add_theme_color_override("font_hover_color", fg)
+	btn.add_theme_color_override("font_pressed_color", fg)
+	btn.custom_minimum_size = Vector2(0, 52)
+	btn.add_theme_stylebox_override("normal", _pill_sb(bg, bg.darkened(0.1), false))
+	btn.add_theme_stylebox_override("hover", _pill_sb(bg, bg.darkened(0.1), false))
+	btn.add_theme_stylebox_override("pressed", _pill_sb(bg.darkened(0.05), bg.darkened(0.15), false))
+	btn.add_theme_stylebox_override("focus", _pill_sb(bg, bg.darkened(0.1), false))
+	btn.add_theme_stylebox_override("disabled", _pill_sb(bg.lightened(0.4), bg.lightened(0.4), false))
+
+func _pill_sb(bg: Color, border: Color, with_border: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(28)
+	if with_border:
+		sb.set_border_width_all(1)
+		sb.border_color = border
+	sb.shadow_color = Color(0, 0, 0, 0.08)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2i(0, 1)
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	sb.content_margin_top = 14
+	sb.content_margin_bottom = 14
+	return sb
 
 # ---------------- wave setup ----------------
 
@@ -242,7 +389,7 @@ func _build_targets_box() -> void:
 		for i in t.count:
 			var pip := _Pip.new()
 			pip.filled = i < t.done
-			pip.color = Palette.SAGE
+			pip.color = PURPLE_DARK
 			row.add_child(pip)
 		targets_box.add_child(row)
 

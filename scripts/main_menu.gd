@@ -10,29 +10,95 @@ const GAMES := [
 	{"id":"listen_dictate","name":"Listen & Dictate","desc":"Hear the word — type it correctly","icon":"♬","tag":"Audio","scene":"res://games/listen_dictate/listen_dictate.tscn"},
 ]
 
+const BG := Color("#faf5ed")
 const TEXT := Color("#5a4840")
 const TEXT_SEC := Color("#9a8a7e")
 const SURFACE := Color("#ffffff")
 const BORDER := Color("#e8e0d8")
 const GOLD_TINT := Color("#fff1c4")
 const GOLD_DEEP := Color("#b48218")
+const MODE_CHIP_BG := Color("#ece4d8")
+const AVATAR_EMOJI := "🦊"
 
 @onready var list: VBoxContainer = $V/Scroll/List
 @onready var greet: Label = $V/Header/Greet
 @onready var xp_pill: PanelContainer = $V/Header/XP
 @onready var xp_label: Label = $V/Header/XP/Label
 @onready var change_mode_btn: Button = $V/ChangeModeBtn
+@onready var mode_badge: Control = $V/ModeBadge
+@onready var title_lbl: Label = $V/Title
 
 func _ready() -> void:
-	greet.text = "Hi, %s" % GameState.player_name
+	# Cream backdrop matching welcome / mode_select.
+	var bg := ColorRect.new()
+	bg.color = BG
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+	move_child(bg, 0)
+
+	var who := GameState.player_name if not GameState.player_name.is_empty() else "there"
+	greet.text = "Hi, %s %s" % [who, AVATAR_EMOJI]
 	greet.add_theme_color_override("font_color", TEXT)
 	greet.add_theme_font_size_override("font_size", 22)
 	_style_xp_pill()
 	_refresh_xp()
-	change_mode_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/mode_select.tscn"))
+
+	# Replace the old mode badge + bottom button with a centered pill row
+	# (mode chip + Change button) like the design.
+	mode_badge.visible = false
+	title_lbl.visible = false
+	change_mode_btn.visible = false
+	_insert_mode_row()
+
 	GameState.score_added.connect(func(_g, _a): _refresh_xp())
 	for g in GAMES:
 		list.add_child(_build_row(g))
+
+func _insert_mode_row() -> void:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+
+	row.add_child(_chip(GameState.mode_name(), MODE_CHIP_BG, TEXT, false))
+	var change_btn := _chip("Change ↗", SURFACE, TEXT, true)
+	change_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/mode_select.tscn"))
+	row.add_child(change_btn)
+
+	var v := $V as VBoxContainer
+	v.add_child(row)
+	# Place right after the header (index 0).
+	v.move_child(row, 1)
+
+func _chip(text: String, bg: Color, fg: Color, clickable: bool) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 13)
+	b.add_theme_color_override("font_color", fg)
+	b.add_theme_color_override("font_hover_color", fg)
+	b.add_theme_color_override("font_pressed_color", fg)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(99)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	if clickable:
+		sb.set_border_width_all(1)
+		sb.border_color = BORDER
+		sb.shadow_color = Color(0, 0, 0, 0.06)
+		sb.shadow_size = 3
+		sb.shadow_offset = Vector2i(0, 1)
+	b.add_theme_stylebox_override("normal", sb)
+	b.add_theme_stylebox_override("hover", sb)
+	b.add_theme_stylebox_override("pressed", sb)
+	b.add_theme_stylebox_override("focus", sb)
+	b.add_theme_stylebox_override("disabled", sb)
+	if not clickable:
+		b.disabled = true
+	return b
 
 func _style_xp_pill() -> void:
 	var sb := StyleBoxFlat.new()

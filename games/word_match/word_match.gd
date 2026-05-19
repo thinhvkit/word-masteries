@@ -22,6 +22,14 @@ const POOLS_8 := [
 ]
 
 const UI := preload("res://scripts/results_ui.gd")
+const Chrome := preload("res://scripts/screen_chrome.gd")
+
+const BLUE_LIGHT := Color("#dceaf2")
+const BLUE_DARK := Color("#3d8bb5")
+const GOLD_LIGHT := Color("#fff1c4")
+const GOLD_DARK := Color("#b48218")
+const CURRENT_BG := Color("#e8f0f6")
+const CURRENT_BORDER := Color("#a8c8de")
 
 var letters_holder: Control
 var preview_label: Label
@@ -57,75 +65,58 @@ func _ready() -> void:
 # ---------------- UI construction (wm_game layout) ----------------
 
 func _build_ui() -> void:
-	UI.bg_layer(self, Palette.BG)
+	Chrome.bg_layer(self)
+	back_btn = Chrome.header(self, "Word Match", "word_match", BLUE_LIGHT, BLUE_DARK)
 
-	# Header.
-	back_btn = Button.new()
-	back_btn.text = "← Back"
-	back_btn.position = Vector2(12, 12)
-	back_btn.size = Vector2(80, 32)
-	add_child(back_btn)
-
-	var title := Label.new()
-	title.text = "Word Match"
-	title.add_theme_color_override("font_color", Palette.TEXT)
-	title.add_theme_font_size_override("font_size", 18)
-	title.position = Vector2(104, 16)
-	add_child(title)
-
-	var diff_chip := UI.chip(GameState.mode_name(), Palette.GOLD_DARK, Color("#fff1c4"), Palette.GOLD_DARK)
-	diff_chip.anchor_left = 1.0
-	diff_chip.anchor_right = 1.0
-	diff_chip.offset_left = -120
-	diff_chip.offset_top = 16
-	diff_chip.offset_right = -12
-	diff_chip.offset_bottom = 40
-	diff_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	add_child(diff_chip)
-
-	# Top stack (timer/score, found pills, current word).
+	# Top stack (HUD chips, found card, current word).
 	var top := VBoxContainer.new()
 	top.anchor_right = 1.0
 	top.offset_left = 16
-	top.offset_top = 56
+	top.offset_top = Chrome.HEADER_H + 12
 	top.offset_right = -16
-	top.offset_bottom = 300
-	top.add_theme_constant_override("separation", 10)
+	top.offset_bottom = 320
+	top.add_theme_constant_override("separation", 12)
 	add_child(top)
 
-	# Timer + Score HUD row.
+	# Timer + XP chips row.
 	var hud := HBoxContainer.new()
 	hud.add_theme_constant_override("separation", 12)
-	timer_label = Label.new()
-	timer_label.text = "2:00"
-	timer_label.add_theme_color_override("font_color", Palette.TERRACOTTA)
-	timer_label.add_theme_font_size_override("font_size", 22)
-	var timer_wrap := UI.chip("2:00", Palette.TERRACOTTA, Color("#fbeaea"), Palette.TERRACOTTA)
-	timer_wrap.add_theme_font_size_override("font_size", 16)
-	# Use chip purely for styling, but bind text via timer_label by replacing it.
-	# Simpler: keep timer_label as a plain styled label and chip-style it ourselves.
-	timer_label.remove_theme_color_override("font_color")
-	timer_label.add_theme_color_override("font_color", Palette.TERRACOTTA)
-	hud.add_child(timer_label)
+	timer_label = _hud_chip("⏱ 2:00", BLUE_LIGHT, BLUE_DARK)
+	hud.add_child(timer_label.get_parent())
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hud.add_child(spacer)
-	score_label = Label.new()
-	score_label.text = "0 XP"
-	score_label.add_theme_color_override("font_color", Palette.PINK_DARK)
-	score_label.add_theme_font_size_override("font_size", 22)
-	hud.add_child(score_label)
+	score_label = _hud_chip("★ 0 XP", GOLD_LIGHT, GOLD_DARK)
+	hud.add_child(score_label.get_parent())
 	top.add_child(hud)
 
-	# Found-words card with pill flow + count.
-	var found_card := UI.card(Palette.SURFACE, Palette.BORDER, 12, 12)
+	# Found-words card (white rounded card with shadow, summary + hint inside).
+	var found_card := PanelContainer.new()
+	var found_sb := StyleBoxFlat.new()
+	found_sb.bg_color = Chrome.SURFACE
+	found_sb.set_corner_radius_all(14)
+	found_sb.set_border_width_all(1)
+	found_sb.border_color = Chrome.BORDER
+	found_sb.shadow_color = Color(0, 0, 0, 0.05)
+	found_sb.shadow_size = 3
+	found_sb.shadow_offset = Vector2i(0, 1)
+	found_sb.content_margin_left = 14
+	found_sb.content_margin_right = 14
+	found_sb.content_margin_top = 12
+	found_sb.content_margin_bottom = 12
+	found_card.add_theme_stylebox_override("panel", found_sb)
 	var found_box := VBoxContainer.new()
-	found_box.add_theme_constant_override("separation", 6)
+	found_box.add_theme_constant_override("separation", 4)
 	found_label = Label.new()
-	found_label.text = "Found words"
-	found_label.add_theme_color_override("font_color", Palette.TEXT_SECONDARY)
+	found_label.text = "Found: 0"
+	found_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	found_label.add_theme_font_size_override("font_size", 13)
 	found_box.add_child(found_label)
+	var hint := Label.new()
+	hint.text = "Drag to form words!"
+	hint.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	hint.add_theme_font_size_override("font_size", 14)
+	found_box.add_child(hint)
 	found_pills_row = HFlowContainer.new()
 	found_pills_row.add_theme_constant_override("h_separation", 6)
 	found_pills_row.add_theme_constant_override("v_separation", 6)
@@ -133,13 +124,21 @@ func _build_ui() -> void:
 	found_card.add_child(found_box)
 	top.add_child(found_card)
 
-	# Current-word card (pink accent).
-	var word_card := UI.card(Color("#fde6ec"), Palette.PINK_DARK, 10, 10)
+	# Current-word pill (light-blue rounded bar, matching the design).
+	var word_card := PanelContainer.new()
+	var word_sb := StyleBoxFlat.new()
+	word_sb.bg_color = CURRENT_BG
+	word_sb.set_corner_radius_all(22)
+	word_sb.set_border_width_all(2)
+	word_sb.border_color = CURRENT_BORDER
+	word_sb.content_margin_top = 12
+	word_sb.content_margin_bottom = 12
+	word_card.add_theme_stylebox_override("panel", word_sb)
 	preview_label = Label.new()
-	preview_label.text = "Drag to form words!"
+	preview_label.text = ""
 	preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	preview_label.add_theme_color_override("font_color", Palette.PINK_DARK)
-	preview_label.add_theme_font_size_override("font_size", 24)
+	preview_label.add_theme_color_override("font_color", BLUE_DARK)
+	preview_label.add_theme_font_size_override("font_size", 22)
 	word_card.add_child(preview_label)
 	top.add_child(word_card)
 
@@ -173,6 +172,40 @@ func _build_ui() -> void:
 	toast.add_theme_font_size_override("font_size", 22)
 	add_child(toast)
 
+	# Static footer hint under the letter circle, matching the design.
+	var footer := Label.new()
+	footer.anchor_left = 0.0
+	footer.anchor_right = 1.0
+	footer.anchor_top = 1.0
+	footer.anchor_bottom = 1.0
+	footer.offset_top = -36
+	footer.offset_bottom = -12
+	footer.offset_left = 16
+	footer.offset_right = -16
+	footer.text = "Drag across letters to form words — lift to submit"
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.add_theme_font_size_override("font_size", 13)
+	footer.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	add_child(footer)
+
+func _hud_chip(text: String, bg: Color, fg: Color) -> Label:
+	# Returns the inner Label so the caller can update text; parented PanelContainer is added.
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(99)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	p.add_theme_stylebox_override("panel", sb)
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", fg)
+	p.add_child(lbl)
+	return lbl
+
 func _start_round() -> void:
 	for c in _letters:
 		c.queue_free()
@@ -198,7 +231,7 @@ func _start_round() -> void:
 	_layout_letters()
 	_refresh_hud()
 	_refresh_found()
-	preview_label.text = "Drag to form words!"
+	preview_label.text = ""
 
 func _pick_pool() -> String:
 	var src: Array
@@ -263,20 +296,15 @@ func _process(delta: float) -> void:
 func _refresh_hud() -> void:
 	var m := int(_time_left) / 60
 	var s := int(_time_left) % 60
-	timer_label.text = "%d:%02d" % [m, s]
-	score_label.text = "%d XP" % _score
+	timer_label.text = "⏱ %d:%02d" % [m, s]
+	score_label.text = "★ %d XP" % _score
 
 func _refresh_found() -> void:
-	found_label.text = "Found words (%d)" % _found.size()
+	found_label.text = "Found: %d" % _found.size()
 	# Replace pill row contents.
 	for c in found_pills_row.get_children():
 		c.queue_free()
 	if _found.is_empty():
-		var hint := Label.new()
-		hint.text = "Drag letters to start"
-		hint.add_theme_color_override("font_color", Palette.TEXT_SECONDARY)
-		hint.add_theme_font_size_override("font_size", 12)
-		found_pills_row.add_child(hint)
 		return
 	for w: String in _found_order:
 		found_pills_row.add_child(UI.pill(w, Color("#e6f5ea"), Palette.SAGE_DARK))

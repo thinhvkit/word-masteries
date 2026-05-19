@@ -33,6 +33,21 @@ const ENEMIES := [
 ]
 
 const UI := preload("res://scripts/results_ui.gd")
+const Chrome := preload("res://scripts/screen_chrome.gd")
+
+const CORAL_LIGHT := Color("#ffdcc7")
+const CORAL_DARK := Color("#c95a1f")
+const SAGE := Color("#a7d99a")
+const SAGE_DARK := Color("#6cb072")
+const HP_PINK := Color("#e07a8c")
+const HP_PINK_DARK := Color("#c95e74")
+const HP_BG := Color("#f1ebe1")
+const PINK_PILL_BG := Color("#fde0e7")
+const PINK_PILL_BORDER := Color("#f2a6b6")
+const SUBMIT_PINK := Color("#e07a8c")
+const TILE_BG := Color("#ffffff")
+const TILE_BORDER := Color("#ece4d8")
+const RAINBOW_ICON := preload("res://assets/boosters/rainbow.svg")
 
 # UI refs (assigned in _build_ui).
 var grid: GridContainer
@@ -92,148 +107,127 @@ func _ready() -> void:
 # ---------------- UI construction (wf_game_a layout) ----------------
 
 func _build_ui() -> void:
-	UI.bg_layer(self, Palette.BG)
-
-	# Header strip: BackBtn + title + topic chip.
-	back_btn = Button.new()
-	back_btn.text = "← Back"
-	back_btn.position = Vector2(12, 12)
-	back_btn.size = Vector2(80, 32)
-	add_child(back_btn)
-
-	var title := Label.new()
-	title.text = "Word Fight"
-	title.add_theme_color_override("font_color", Palette.TEXT)
-	title.add_theme_font_size_override("font_size", 18)
-	title.position = Vector2(104, 16)
-	add_child(title)
-
-	topic_label = UI.chip("Topic: —", Palette.GOLD_DARK, Color("#fff1c4"), Palette.GOLD_DARK)
-	topic_label.anchor_left = 1.0
-	topic_label.anchor_right = 1.0
-	topic_label.offset_left = -180
-	topic_label.offset_top = 16
-	topic_label.offset_right = -12
-	topic_label.offset_bottom = 40
-	topic_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	Chrome.bg_layer(self)
+	back_btn = Chrome.header(self, "Word Fight", "Food ×2", Color("#fff1c4"), Color("#b48218"))
+	# Keep `topic_label` as a Label so existing _start_battle can update its text.
+	# We'll wire the in-header chip to mirror it below.
+	topic_label = Label.new()
+	topic_label.visible = false
 	add_child(topic_label)
 
 	# Body VBox.
 	var body := VBoxContainer.new()
 	body.anchor_right = 1.0
 	body.anchor_bottom = 1.0
-	body.offset_left = 12
-	body.offset_top = 56
-	body.offset_right = -12
+	body.offset_left = 16
+	body.offset_top = Chrome.HEADER_H + 12
+	body.offset_right = -16
 	body.offset_bottom = -12
-	body.add_theme_constant_override("separation", 10)
+	body.add_theme_constant_override("separation", 12)
 	add_child(body)
 
-	# Player HP row.
-	var p_row := HBoxContainer.new()
-	p_row.add_theme_constant_override("separation", 10)
-	p_row.add_child(UI.avatar(Palette.SAGE, 36))
-	var p_box := VBoxContainer.new()
-	p_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p_box.add_theme_constant_override("separation", 2)
+	# Player HP row — circle avatar + thick rounded bar + value.
+	player_hp_bar = _hp_bar(SAGE)
 	player_hp_label = Label.new()
-	player_hp_label.text = "You: 200"
-	player_hp_label.add_theme_color_override("font_color", Palette.TEXT)
-	player_hp_label.add_theme_font_size_override("font_size", 13)
-	p_box.add_child(player_hp_label)
-	player_hp_bar = UI.hp_bar(Palette.SAGE, Palette.HAIRLINE, 12)
-	p_box.add_child(player_hp_bar)
-	p_row.add_child(p_box)
-	body.add_child(p_row)
+	body.add_child(_hp_row(SAGE, "🦋", player_hp_bar, player_hp_label))
+	player_hp_label.text = "200"
 
 	# Enemy HP row.
-	var e_row := HBoxContainer.new()
-	e_row.add_theme_constant_override("separation", 10)
-	var e_box := VBoxContainer.new()
-	e_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	e_box.add_theme_constant_override("separation", 2)
-	enemy_name_label = Label.new()
-	enemy_name_label.text = "Enemy"
-	enemy_name_label.add_theme_color_override("font_color", Palette.TERRACOTTA)
-	enemy_name_label.add_theme_font_size_override("font_size", 13)
-	enemy_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	e_box.add_child(enemy_name_label)
-	var e_inner := HBoxContainer.new()
-	e_inner.add_theme_constant_override("separation", 8)
-	enemy_hp_bar = UI.hp_bar(Palette.TERRACOTTA, Palette.HAIRLINE, 12)
-	enemy_hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	e_inner.add_child(enemy_hp_bar)
+	enemy_hp_bar = _hp_bar(HP_PINK)
 	enemy_hp_label = Label.new()
-	enemy_hp_label.text = "0"
-	enemy_hp_label.add_theme_color_override("font_color", Palette.TEXT)
-	enemy_hp_label.add_theme_font_size_override("font_size", 14)
-	enemy_hp_label.custom_minimum_size = Vector2(36, 0)
-	enemy_hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	e_inner.add_child(enemy_hp_label)
-	e_box.add_child(e_inner)
-	e_row.add_child(e_box)
-	e_row.add_child(UI.avatar(Palette.TERRACOTTA, 36))
+	var e_row := _hp_row(HP_PINK, "🐛", enemy_hp_bar, enemy_hp_label)
+	enemy_name_label = Label.new()
+	enemy_name_label.visible = false  # name now shows in the avatar row above; design has no name label
+	add_child(enemy_name_label)
 	body.add_child(e_row)
 
-	# Current word card (pink accent).
-	var word_card := UI.card(Color("#fde6ec"), Palette.PINK_DARK, 10, 12)
+	# "Your word: —" pink pill.
+	var word_pill := PanelContainer.new()
+	var wp_sb := StyleBoxFlat.new()
+	wp_sb.bg_color = PINK_PILL_BG
+	wp_sb.set_corner_radius_all(22)
+	wp_sb.set_border_width_all(2)
+	wp_sb.border_color = PINK_PILL_BORDER
+	wp_sb.content_margin_left = 16
+	wp_sb.content_margin_right = 16
+	wp_sb.content_margin_top = 12
+	wp_sb.content_margin_bottom = 12
+	word_pill.add_theme_stylebox_override("panel", wp_sb)
 	var word_row := HBoxContainer.new()
 	word_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	word_row.add_theme_constant_override("separation", 8)
+	word_row.add_theme_constant_override("separation", 6)
 	var prefix := Label.new()
 	prefix.text = "Your word:"
-	prefix.add_theme_color_override("font_color", Palette.TEXT_SECONDARY)
-	prefix.add_theme_font_size_override("font_size", 13)
+	prefix.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	prefix.add_theme_font_size_override("font_size", 14)
 	word_row.add_child(prefix)
 	current_word_label = Label.new()
 	current_word_label.text = "—"
-	current_word_label.add_theme_color_override("font_color", Palette.PINK_DARK)
-	current_word_label.add_theme_font_size_override("font_size", 22)
+	current_word_label.add_theme_color_override("font_color", HP_PINK_DARK)
+	current_word_label.add_theme_font_size_override("font_size", 18)
 	word_row.add_child(current_word_label)
 	dmg_preview_label = Label.new()
 	dmg_preview_label.text = ""
-	dmg_preview_label.add_theme_color_override("font_color", Palette.SAGE_DARK)
-	dmg_preview_label.add_theme_font_size_override("font_size", 13)
+	dmg_preview_label.add_theme_color_override("font_color", SAGE_DARK)
+	dmg_preview_label.add_theme_font_size_override("font_size", 12)
 	word_row.add_child(dmg_preview_label)
-	word_card.add_child(word_row)
-	body.add_child(word_card)
+	word_pill.add_child(word_row)
+	body.add_child(word_pill)
 
-	# Board card.
-	var board_card := UI.card(Palette.SURFACE, Palette.BORDER, 12, 12)
+	# Board — white tiles in a 5x5 grid (no surrounding card to match design).
 	var board_wrap := CenterContainer.new()
 	grid = GridContainer.new()
 	grid.columns = COLS
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
 	board_wrap.add_child(grid)
-	board_card.add_child(board_wrap)
-	body.add_child(board_card)
+	body.add_child(board_wrap)
 
-	# Boosters row: streak dots + spacer + rainbow button.
+	# Boosters row: 4 streak dots + "streak" label on left, rainbow chip on right.
 	var boosters := HBoxContainer.new()
-	boosters.add_theme_constant_override("separation", 8)
-	streak_dots_row = UI.streak_dots(0, RAINBOW_STREAK_REQUIRED, 9)
+	boosters.add_theme_constant_override("separation", 6)
+	streak_dots_row = UI.streak_dots(0, RAINBOW_STREAK_REQUIRED, 8)
 	boosters.add_child(streak_dots_row)
+	var streak_lbl := Label.new()
+	streak_lbl.text = "streak"
+	streak_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	streak_lbl.add_theme_font_size_override("font_size", 13)
+	boosters.add_child(streak_lbl)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	boosters.add_child(spacer)
-	var boost_lbl := Label.new()
-	boost_lbl.text = "Boosters:"
-	boost_lbl.add_theme_color_override("font_color", Palette.TEXT_SECONDARY)
-	boost_lbl.add_theme_font_size_override("font_size", 13)
-	boosters.add_child(boost_lbl)
-	rainbow_btn = UI.action_btn("Use 🌈 (0)", false, true)
-	rainbow_btn.custom_minimum_size = Vector2(110, 36)
+	rainbow_btn = Button.new()
+	rainbow_btn.text = "Use (0)"
+	rainbow_btn.icon = RAINBOW_ICON
+	rainbow_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rainbow_btn.expand_icon = false
+	rainbow_btn.add_theme_constant_override("icon_max_width", 22)
+	rainbow_btn.add_theme_constant_override("h_separation", 4)
+	rainbow_btn.focus_mode = Control.FOCUS_NONE
+	rainbow_btn.add_theme_font_size_override("font_size", 13)
+	rainbow_btn.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	var rb_sb := StyleBoxFlat.new()
+	rb_sb.bg_color = Color("#f1ebe1")
+	rb_sb.set_corner_radius_all(99)
+	rb_sb.content_margin_left = 12
+	rb_sb.content_margin_right = 12
+	rb_sb.content_margin_top = 6
+	rb_sb.content_margin_bottom = 6
+	rainbow_btn.add_theme_stylebox_override("normal", rb_sb)
+	rainbow_btn.add_theme_stylebox_override("hover", rb_sb)
+	rainbow_btn.add_theme_stylebox_override("pressed", rb_sb)
+	rainbow_btn.add_theme_stylebox_override("disabled", rb_sb)
+	rainbow_btn.add_theme_stylebox_override("focus", rb_sb)
 	boosters.add_child(rainbow_btn)
 	body.add_child(boosters)
 
-	# Actions row.
+	# Actions row — Clear (white pill) + Submit (pink pill).
 	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 10)
-	clear_btn = UI.action_btn("Clear", false, false)
+	actions.add_theme_constant_override("separation", 12)
+	clear_btn = Chrome.pill_button("Clear", Chrome.SURFACE, Chrome.TEXT)
 	clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(clear_btn)
-	submit_btn = UI.action_btn("Submit Word", true, true)
+	submit_btn = Chrome.pill_button("Submit", SUBMIT_PINK)
 	submit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(submit_btn)
 	body.add_child(actions)
@@ -242,9 +236,55 @@ func _build_ui() -> void:
 	status_label = Label.new()
 	status_label.text = ""
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_label.add_theme_color_override("font_color", Palette.TEXT_SECONDARY)
-	status_label.add_theme_font_size_override("font_size", 13)
+	status_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	status_label.add_theme_font_size_override("font_size", 14)
 	body.add_child(status_label)
+
+# ---- HP row helpers ----
+func _hp_bar(fill: Color) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.min_value = 0
+	bar.max_value = 100
+	bar.value = 100
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, 16)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = HP_BG
+	bg.set_corner_radius_all(99)
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = fill
+	fg.set_corner_radius_all(99)
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("fill", fg)
+	return bar
+
+func _hp_row(circle: Color, emoji: String, bar: ProgressBar, value_lbl: Label) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var av := Panel.new()
+	av.custom_minimum_size = Vector2(36, 36)
+	var av_sb := StyleBoxFlat.new()
+	av_sb.bg_color = circle
+	av_sb.set_corner_radius_all(18)
+	av.add_theme_stylebox_override("panel", av_sb)
+	var em := Label.new()
+	em.text = emoji
+	em.add_theme_font_size_override("font_size", 18)
+	em.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	em.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	em.set_anchors_preset(Control.PRESET_FULL_RECT)
+	av.add_child(em)
+	row.add_child(av)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(bar)
+	value_lbl.text = "0"
+	value_lbl.add_theme_color_override("font_color", Chrome.TEXT)
+	value_lbl.add_theme_font_size_override("font_size", 14)
+	value_lbl.custom_minimum_size = Vector2(36, 0)
+	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(value_lbl)
+	return row
 
 # ---------------- battle setup ----------------
 
@@ -573,14 +613,14 @@ func _resolve_path_for_word(word: String) -> Array:
 # ---------------- HUD / status ----------------
 
 func _refresh_hud() -> void:
-	player_hp_label.text = "You: %d" % _player_hp
+	player_hp_label.text = "%d" % _player_hp
 	enemy_hp_label.text = "%d" % _enemy_hp
 	player_hp_bar.max_value = PLAYER_MAX_HP
 	player_hp_bar.value = _player_hp
 	enemy_hp_bar.max_value = _enemy_max_hp
 	enemy_hp_bar.value = _enemy_hp
 	rainbow_btn.disabled = _rainbows <= 0 or not _is_player_turn or _busy
-	rainbow_btn.text = "🌈 Armed" if _rainbow_pending else "Use 🌈 (%d)" % _rainbows
+	rainbow_btn.text = "Armed" if _rainbow_pending else "Use (%d)" % _rainbows
 	_refresh_streak_dots()
 
 func _refresh_streak_dots() -> void:

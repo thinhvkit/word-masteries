@@ -37,16 +37,30 @@ const ADVANCED := {
 	"mult": "2.0",
 }
 
+const BG := Color("#faf5ed")
+
 @onready var greet: Label = $V/Greet
 @onready var sub: Label = $V/Sub
 @onready var cards_row: HBoxContainer = $V/Cards
 @onready var tip: PanelContainer = $V/Tip
 
 func _ready() -> void:
-	greet.text = "Hi, %s! 👋" % GameState.player_name
+	# Cream backdrop to match the welcome screen.
+	var bg := ColorRect.new()
+	bg.color = BG
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+	move_child(bg, 0)
+
+	# Don't let the card row eat the remaining vertical space — keep cards compact.
+	cards_row.size_flags_vertical = Control.SIZE_FILL
+
+	var who := GameState.player_name if not GameState.player_name.is_empty() else "there"
+	greet.text = "Hi, %s! 👋" % who
 	greet.add_theme_font_size_override("font_size", 28)
 	greet.add_theme_color_override("font_color", TEXT)
-	sub.text = "Choose your difficulty. This applies to all games and can be changed in Settings."
+	sub.text = "Choose your difficulty. This applies to all games."
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", TEXT_SEC)
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -127,6 +141,8 @@ func _make_card(data: Dictionary, color: Color, dark: Color, light: Color, mode_
 		lbl.add_theme_font_size_override("font_size", 12)
 		lbl.add_theme_color_override("font_color", TEXT)
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(lbl)
 		bullets_box.add_child(row)
 		bullet_labels.append(lbl)
