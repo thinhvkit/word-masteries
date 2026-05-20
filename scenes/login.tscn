@@ -72,4 +72,4 @@ size_flags_vertical = 3
 
 [node name="Continue" type="Button" parent="V"]
 layout_mode = 2
-text = "Continue →"
+text = "Continue"

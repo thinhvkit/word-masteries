@@ -72,7 +72,7 @@ var back_btn: Button
 var streak_dots_row: HBoxContainer
 var board_bg: Control                  # animated gradient backdrop behind the 5x5
 var chain_overlay: Control             # draws connector lines between selected tiles
-var board_wrap: CenterContainer
+var board_wrap: Control
 var player_avatar: Control
 var enemy_avatar: Control
 var submit_glow: Panel
@@ -138,7 +138,7 @@ func _build_ui() -> void:
 	body.offset_top = Chrome.HEADER_H + 12
 	body.offset_right = -16
 	body.offset_bottom = -12
-	body.add_theme_constant_override("separation", 12)
+	body.add_theme_constant_override("separation", 14)
 	add_child(body)
 
 	# Player HP row — circle avatar (SVG) + thick rounded bar + value.
@@ -168,54 +168,62 @@ func _build_ui() -> void:
 	wp_sb.set_corner_radius_all(22)
 	wp_sb.set_border_width_all(2)
 	wp_sb.border_color = PINK_PILL_BORDER
-	wp_sb.content_margin_left = 16
-	wp_sb.content_margin_right = 16
-	wp_sb.content_margin_top = 12
-	wp_sb.content_margin_bottom = 12
+	wp_sb.content_margin_left = 20
+	wp_sb.content_margin_right = 20
+	wp_sb.content_margin_top = 16
+	wp_sb.content_margin_bottom = 16
+	wp_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.2)
+	wp_sb.shadow_size = 6
+	wp_sb.shadow_offset = Vector2i(0, 2)
 	word_pill.add_theme_stylebox_override("panel", wp_sb)
 	var word_row := HBoxContainer.new()
 	word_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	word_row.add_theme_constant_override("separation", 6)
+	word_row.add_theme_constant_override("separation", 10)
 	var prefix := Label.new()
 	prefix.text = "Your word:"
 	prefix.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	prefix.add_theme_font_size_override("font_size", 14)
+	prefix.add_theme_font_size_override("font_size", 15)
 	word_row.add_child(prefix)
 	current_word_label = Label.new()
 	current_word_label.text = "—"
 	current_word_label.add_theme_color_override("font_color", HP_PINK_DARK)
-	current_word_label.add_theme_font_size_override("font_size", 18)
+	current_word_label.add_theme_font_size_override("font_size", 24)
 	word_row.add_child(current_word_label)
 	dmg_preview_label = Label.new()
 	dmg_preview_label.text = ""
 	dmg_preview_label.add_theme_color_override("font_color", SAGE_DARK)
-	dmg_preview_label.add_theme_font_size_override("font_size", 12)
+	dmg_preview_label.add_theme_font_size_override("font_size", 14)
 	word_row.add_child(dmg_preview_label)
 	word_pill.add_child(word_row)
 	body.add_child(word_pill)
 
-	# Board — vibrant animated gradient backdrop + 5x5 grid + chain connector overlay.
-	board_wrap = CenterContainer.new()
-	var board_stack := Control.new()
-	board_stack.custom_minimum_size = Vector2(COLS * 56 + (COLS - 1) * 8 + 24, ROWS * 56 + (ROWS - 1) * 8 + 24)
-	board_wrap.add_child(board_stack)
+	# Board — animated gradient backdrop fills all leftover vertical space;
+	# the grid stays centered inside it. Removes the dead area below the board.
+	var board_panel := Control.new()
+	board_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Minimum so the board never collapses below tile size on small screens.
+	board_panel.custom_minimum_size = Vector2(COLS * 56 + (COLS - 1) * 10 + 24, ROWS * 56 + (ROWS - 1) * 10 + 24)
 	board_bg = _AnimatedBoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	board_stack.add_child(board_bg)
+	board_panel.add_child(board_bg)
 	var grid_center := CenterContainer.new()
 	grid_center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	board_stack.add_child(grid_center)
+	board_panel.add_child(grid_center)
 	grid = GridContainer.new()
 	grid.columns = COLS
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
 	grid_center.add_child(grid)
 	chain_overlay = _ChainOverlay.new()
 	chain_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	chain_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	board_stack.add_child(chain_overlay)
-	body.add_child(board_wrap)
+	board_panel.add_child(chain_overlay)
+	# board_wrap's old role (CenterContainer parent for coordinate translation)
+	# is now played by board_panel itself; alias them so existing FX code works.
+	board_wrap = board_panel
+	body.add_child(board_panel)
 
 	# Boosters row: 4 streak dots + "streak" label on left, rainbow chip on right.
 	var boosters := HBoxContainer.new()
@@ -225,7 +233,7 @@ func _build_ui() -> void:
 	var streak_lbl := Label.new()
 	streak_lbl.text = "streak"
 	streak_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	streak_lbl.add_theme_font_size_override("font_size", 13)
+	streak_lbl.add_theme_font_size_override("font_size", 15)
 	boosters.add_child(streak_lbl)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -238,7 +246,7 @@ func _build_ui() -> void:
 	rainbow_btn.add_theme_constant_override("icon_max_width", 22)
 	rainbow_btn.add_theme_constant_override("h_separation", 4)
 	rainbow_btn.focus_mode = Control.FOCUS_NONE
-	rainbow_btn.add_theme_font_size_override("font_size", 13)
+	rainbow_btn.add_theme_font_size_override("font_size", 15)
 	rainbow_btn.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	var rb_sb := StyleBoxFlat.new()
 	rb_sb.bg_color = Color("#f1ebe1")
@@ -293,7 +301,7 @@ func _build_ui() -> void:
 	status_label.text = ""
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	status_label.add_theme_font_size_override("font_size", 14)
+	status_label.add_theme_font_size_override("font_size", 16)
 	body.add_child(status_label)
 
 # ---- HP row helpers ----
@@ -303,7 +311,7 @@ func _hp_bar(fill: Color) -> ProgressBar:
 	bar.max_value = 100
 	bar.value = 100
 	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(0, 16)
+	bar.custom_minimum_size = Vector2(0, 20)
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = HP_BG
 	bg.set_corner_radius_all(99)
@@ -316,16 +324,16 @@ func _hp_bar(fill: Color) -> ProgressBar:
 
 func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("separation", 12)
 	var av := Panel.new()
-	av.custom_minimum_size = Vector2(40, 40)
-	av.pivot_offset = Vector2(20, 20)
+	av.custom_minimum_size = Vector2(48, 48)
+	av.pivot_offset = Vector2(24, 24)
 	var av_sb := StyleBoxFlat.new()
 	av_sb.bg_color = circle
-	av_sb.set_corner_radius_all(20)
-	av_sb.shadow_color = Color(0, 0, 0, 0.12)
-	av_sb.shadow_size = 3
-	av_sb.shadow_offset = Vector2i(0, 1)
+	av_sb.set_corner_radius_all(24)
+	av_sb.shadow_color = Color(0, 0, 0, 0.16)
+	av_sb.shadow_size = 4
+	av_sb.shadow_offset = Vector2i(0, 2)
 	av.add_theme_stylebox_override("panel", av_sb)
 	if ResourceLoader.exists(svg_path):
 		var icon := TextureRect.new()
@@ -345,7 +353,7 @@ func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label
 	row.add_child(bar)
 	value_lbl.text = "0"
 	value_lbl.add_theme_color_override("font_color", Chrome.TEXT)
-	value_lbl.add_theme_font_size_override("font_size", 14)
+	value_lbl.add_theme_font_size_override("font_size", 17)
 	value_lbl.custom_minimum_size = Vector2(36, 0)
 	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(value_lbl)
@@ -623,13 +631,19 @@ func _enemy_turn() -> void:
 		await get_tree().create_timer(0.6).timeout
 		_end_enemy_turn()
 		return
-	# Animate selection: mark tiles briefly.
+	# Animate selection one letter at a time so the player can read the word as
+	# it forms. Show preview text in the status line, then pause before the hit.
 	var path: Array = pick.path
+	var word: String = pick.word
 	for i in path.size():
 		var t: Tile = _tiles[path[i]]
 		t.selected_order = i
-		await get_tree().create_timer(0.12).timeout
-	var word: String = pick.word
+		# Live preview of the partial word the enemy is spelling.
+		_set_status("Enemy: %s_" % word.substr(0, i + 1).to_upper())
+		await get_tree().create_timer(0.32).timeout
+	# Hold the completed word so the player can read it before the hit.
+	_set_status("Enemy plays %s…" % word.to_upper())
+	await get_tree().create_timer(0.7).timeout
 	var topic_match := Topics.has(_topic, word)
 	var dmg: int = word.length() * DMG_PER_LETTER
 	if topic_match:
@@ -644,6 +658,8 @@ func _enemy_turn() -> void:
 		Fx.shake(player_avatar, 8.0, 0.35)
 	if dmg >= 80:
 		Fx.shake(self, 4.0, 0.25)
+	# Hold on the hit reaction before the tiles dissolve.
+	await get_tree().create_timer(0.7).timeout
 	# Consume + refill those tiles.
 	_selected.clear()
 	for i in path:

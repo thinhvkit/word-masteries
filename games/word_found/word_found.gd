@@ -118,9 +118,9 @@ func _apply_design() -> void:
 	v.offset_top = Chrome.HEADER_H + 12
 
 	# HUD row — vibrant chip pills.
-	wave_lbl.add_theme_font_size_override("font_size", 15)
+	wave_lbl.add_theme_font_size_override("font_size", 17)
 	wave_lbl.add_theme_color_override("font_color", Color.WHITE)
-	score_lbl.add_theme_font_size_override("font_size", 15)
+	score_lbl.add_theme_font_size_override("font_size", 17)
 	score_lbl.add_theme_color_override("font_color", VIBRANT_GOLD_DARK)
 	_wave_chip = _wrap_in_vibrant_chip(wave_lbl, VIBRANT_BLUE, VIBRANT_BLUE_DARK)
 	_score_chip = _wrap_in_vibrant_chip(score_lbl, VIBRANT_GOLD, Color("#dba830"))
@@ -129,18 +129,18 @@ func _apply_design() -> void:
 	var targets_label_node: Label = $V/TargetsLabel
 	targets_label_node.text = "Targets"
 	targets_label_node.add_theme_color_override("font_color", VIBRANT_GOLD)
-	targets_label_node.add_theme_font_size_override("font_size", 14)
+	targets_label_node.add_theme_font_size_override("font_size", 16)
 	_wrap_in_dark_card([targets_label_node, targets_box], v)
 
 	# Row2: vibrant magenta current-word pill.
 	row2_label.add_theme_color_override("font_color", Color.WHITE)
 	row2_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
 	row2_label.add_theme_constant_override("outline_size", 4)
-	row2_label.add_theme_font_size_override("font_size", 22)
+	row2_label.add_theme_font_size_override("font_size", 28)
 	var row2_node: Control = $V/Row2
 	var caption := Label.new()
 	caption.text = "Your word ↓ (tap to undo)"
-	caption.add_theme_font_size_override("font_size", 12)
+	caption.add_theme_font_size_override("font_size", 14)
 	caption.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	v.add_child(caption)
 	v.move_child(caption, row2_node.get_index())
@@ -166,14 +166,14 @@ func _apply_design() -> void:
 	var row1_lbl: Label = $V/Row1Label
 	row1_lbl.text = "Available letters ↓ tap to use"
 	row1_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	row1_lbl.add_theme_font_size_override("font_size", 12)
+	row1_lbl.add_theme_font_size_override("font_size", 14)
 	_wrap_row1_with_bg(row1_grid, v)
 
 	# Status text styling.
 	status_lbl.add_theme_color_override("font_color", Chrome.TEXT)
-	status_lbl.add_theme_font_size_override("font_size", 14)
+	status_lbl.add_theme_font_size_override("font_size", 16)
 	bonus_lbl.add_theme_color_override("font_color", VIBRANT_GOLD_DARK)
-	bonus_lbl.add_theme_font_size_override("font_size", 13)
+	bonus_lbl.add_theme_font_size_override("font_size", 15)
 
 	# Action buttons — Clear (white pill) + Submit (vibrant magenta with glow).
 	_pill_btn(clear_btn, Chrome.SURFACE, Chrome.TEXT)
@@ -266,13 +266,16 @@ func _wrap_row1_with_bg(grid: GridContainer, parent: Control) -> void:
 	sb.content_margin_top = 14
 	sb.content_margin_bottom = 14
 	card.add_theme_stylebox_override("panel", sb)
+	# Card itself must expand for the parent VBox to grant it leftover height.
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 	parent.move_child(card, idx)
 	# Stack: animated bg fills card; grid sits on top.
 	var stack := Control.new()
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.custom_minimum_size = Vector2(0, 200)
+	stack.custom_minimum_size = Vector2(0, 240)
 	card.add_child(stack)
 	_row1_bg = _AnimatedBoardBG.new()
 	_row1_bg.set_anchors_preset(Control.PRESET_FULL_RECT)

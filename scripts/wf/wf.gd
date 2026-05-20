@@ -186,14 +186,20 @@ static func app_head(title: String, back: bool = false, badge: String = "", righ
 	margin.add_child(row)
 	if back:
 		var arrow := Button.new()
-		arrow.text = "←"
 		arrow.flat = true
 		arrow.focus_mode = Control.FOCUS_NONE
-		arrow.add_theme_font_override("font", font_bold())
-		arrow.add_theme_font_size_override("font_size", 24)
-		arrow.add_theme_color_override("font_color", DARK_TEXT if dark else TEXT)
-		arrow.add_theme_color_override("font_hover_color", DARK_TEXT if dark else TEXT)
-		arrow.add_theme_color_override("font_pressed_color", MUTED)
+		var arrow_path := "res://assets/icons/arrow_left.svg"
+		if ResourceLoader.exists(arrow_path):
+			arrow.icon = load(arrow_path)
+			arrow.expand_icon = false
+			arrow.modulate = DARK_TEXT if dark else TEXT
+		else:
+			arrow.text = "<"
+			arrow.add_theme_font_override("font", font_bold())
+			arrow.add_theme_font_size_override("font_size", 24)
+			arrow.add_theme_color_override("font_color", DARK_TEXT if dark else TEXT)
+			arrow.add_theme_color_override("font_hover_color", DARK_TEXT if dark else TEXT)
+			arrow.add_theme_color_override("font_pressed_color", MUTED)
 		arrow.custom_minimum_size = Vector2(32, 32)
 		arrow.set_meta("nav", "$back")
 		row.add_child(arrow)

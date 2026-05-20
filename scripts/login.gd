@@ -194,9 +194,16 @@ func _refresh_name() -> void:
 
 func _style_continue() -> void:
 	continue_btn.custom_minimum_size = Vector2(0, 56)
-	continue_btn.text = "Continue →"
+	continue_btn.text = "Continue"
 	continue_btn.add_theme_font_size_override("font_size", 17)
 	continue_btn.focus_mode = Control.FOCUS_NONE
+	var arrow_path := "res://assets/icons/arrow_right.svg"
+	if ResourceLoader.exists(arrow_path):
+		continue_btn.icon = load(arrow_path)
+		continue_btn.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		continue_btn.expand_icon = false
+		continue_btn.add_theme_constant_override("icon_max_width", 24)
+		continue_btn.add_theme_constant_override("h_separation", 10)
 	Palette.style_button(continue_btn, PRIMARY, Color.WHITE, 16)
 	var disabled := Palette.chunky_button_stylebox(Color("#d8cdc0"), 16)
 	continue_btn.add_theme_stylebox_override("disabled", disabled)

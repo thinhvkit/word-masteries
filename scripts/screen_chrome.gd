@@ -45,9 +45,16 @@ static func header(parent: Control, title: String, tag_text: String = "", tag_bg
 	panel.add_child(row)
 
 	var back := Button.new()
-	back.text = "←"
+	back.text = ""
 	back.focus_mode = Control.FOCUS_NONE
-	back.add_theme_font_size_override("font_size", 22)
+	var arrow_tex_path := "res://assets/icons/arrow_left.svg"
+	if ResourceLoader.exists(arrow_tex_path):
+		back.icon = load(arrow_tex_path)
+		back.expand_icon = false
+		back.modulate = TEXT      # tint the white-stroke SVG to header text color
+	else:
+		back.text = "<"           # fallback only if icon is missing
+		back.add_theme_font_size_override("font_size", 22)
 	back.add_theme_color_override("font_color", TEXT)
 	back.add_theme_color_override("font_hover_color", TEXT)
 	back.add_theme_color_override("font_pressed_color", TEXT)
@@ -56,7 +63,7 @@ static func header(parent: Control, title: String, tag_text: String = "", tag_bg
 	back.add_theme_stylebox_override("hover", empty)
 	back.add_theme_stylebox_override("pressed", empty)
 	back.add_theme_stylebox_override("focus", empty)
-	back.custom_minimum_size = Vector2(28, 0)
+	back.custom_minimum_size = Vector2(32, 32)
 	row.add_child(back)
 
 	var title_lbl := Label.new()

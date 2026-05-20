@@ -97,14 +97,14 @@ func _build_ui() -> void:
 	# Timer + XP chips row.
 	var hud := HBoxContainer.new()
 	hud.add_theme_constant_override("separation", 12)
-	timer_label = _hud_chip("⏱ 2:00", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK)
-	timer_chip = timer_label.get_parent() as Control
+	timer_label = _hud_chip("2:00", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK, "res://assets/icons/clock.svg")
+	timer_chip = timer_label.get_parent().get_parent() as Control
 	hud.add_child(timer_chip)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hud.add_child(spacer)
-	score_label = _hud_chip("★ 0 XP", VIBRANT_GOLD, VIBRANT_GOLD_DARK, Color("#dba830"))
-	hud.add_child(score_label.get_parent())
+	score_label = _hud_chip("0 XP", VIBRANT_GOLD, VIBRANT_GOLD_DARK, Color("#dba830"), "res://assets/icons/star.svg")
+	hud.add_child(score_label.get_parent().get_parent())
 	top.add_child(hud)
 
 	# Found-words card — dark vibrant card matching the board palette.
@@ -127,12 +127,12 @@ func _build_ui() -> void:
 	found_label = Label.new()
 	found_label.text = "Found: 0"
 	found_label.add_theme_color_override("font_color", Color("#ffd027"))
-	found_label.add_theme_font_size_override("font_size", 14)
+	found_label.add_theme_font_size_override("font_size", 16)
 	found_box.add_child(found_label)
 	var hint := Label.new()
 	hint.text = "Drag to form words!"
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
-	hint.add_theme_font_size_override("font_size", 15)
+	hint.add_theme_font_size_override("font_size", 17)
 	found_box.add_child(hint)
 	found_pills_row = HFlowContainer.new()
 	found_pills_row.add_theme_constant_override("h_separation", 6)
@@ -160,33 +160,39 @@ func _build_ui() -> void:
 	preview_label.add_theme_color_override("font_color", Color.WHITE)
 	preview_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
 	preview_label.add_theme_constant_override("outline_size", 4)
-	preview_label.add_theme_font_size_override("font_size", 24)
+	preview_label.add_theme_font_size_override("font_size", 28)
 	word_card.add_child(preview_label)
 	top.add_child(word_card)
 
-	# Animated vibrant backdrop behind the letter ring (Word Fight style).
+	# Animated vibrant backdrop stretches to fill the area between the top
+	# stack and the footer hint — the previously-fixed 444×444 box left big
+	# empty bands on tall screens. The ring's radius is derived from the
+	# holder size, so a larger holder = larger ring automatically.
+	const BOARD_AREA_TOP := 340   # below the HUD + found card + current-word pill
+	const BOARD_AREA_BOTTOM := -48  # above the footer hint
+	const BOARD_AREA_INSET := 8
 	board_bg = _AnimatedBoardBG.new()
-	board_bg.anchor_left = 0.5
-	board_bg.anchor_top = 1.0
-	board_bg.anchor_right = 0.5
+	board_bg.anchor_left = 0.0
+	board_bg.anchor_right = 1.0
+	board_bg.anchor_top = 0.0
 	board_bg.anchor_bottom = 1.0
-	board_bg.offset_left = -222
-	board_bg.offset_top = -452
-	board_bg.offset_right = 222
-	board_bg.offset_bottom = -8
+	board_bg.offset_left = BOARD_AREA_INSET
+	board_bg.offset_top = Chrome.HEADER_H + BOARD_AREA_TOP
+	board_bg.offset_right = -BOARD_AREA_INSET
+	board_bg.offset_bottom = BOARD_AREA_BOTTOM
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(board_bg)
 
-	# Letters holder, anchored to bottom-center.
+	# Letters holder shares the same rect so taps land naturally over the ring.
 	letters_holder = Control.new()
-	letters_holder.anchor_left = 0.5
-	letters_holder.anchor_top = 1.0
-	letters_holder.anchor_right = 0.5
+	letters_holder.anchor_left = 0.0
+	letters_holder.anchor_right = 1.0
+	letters_holder.anchor_top = 0.0
 	letters_holder.anchor_bottom = 1.0
-	letters_holder.offset_left = -210
-	letters_holder.offset_top = -440
-	letters_holder.offset_right = 210
-	letters_holder.offset_bottom = -20
+	letters_holder.offset_left = BOARD_AREA_INSET
+	letters_holder.offset_top = Chrome.HEADER_H + BOARD_AREA_TOP
+	letters_holder.offset_right = -BOARD_AREA_INSET
+	letters_holder.offset_bottom = BOARD_AREA_BOTTOM
 	letters_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(letters_holder)
 
@@ -211,7 +217,7 @@ func _build_ui() -> void:
 	toast.offset_bottom = 320
 	toast.text = ""
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast.add_theme_font_size_override("font_size", 22)
+	toast.add_theme_font_size_override("font_size", 24)
 	add_child(toast)
 
 	# Static footer hint under the letter circle, matching the design.
@@ -226,12 +232,14 @@ func _build_ui() -> void:
 	footer.offset_right = -16
 	footer.text = "Drag across letters to form words — lift to submit"
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.add_theme_font_size_override("font_size", 13)
+	footer.add_theme_font_size_override("font_size", 14)
 	footer.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	add_child(footer)
 
-func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0, 0)) -> Label:
-	# Returns the inner Label so the caller can update text; parented PanelContainer is added.
+func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0, 0), icon_path: String = "") -> Label:
+	# Returns the inner Label so the caller can update text. The parent is an
+	# HBoxContainer (icon + label) wrapped in the PanelContainer; callers that
+	# need the chip Control use lbl.get_parent().get_parent().
 	var p := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
@@ -247,11 +255,25 @@ func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0
 		sb.set_border_width_all(2)
 		sb.border_color = border
 	p.add_theme_stylebox_override("panel", sb)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	p.add_child(row)
+	if icon_path != "" and ResourceLoader.exists(icon_path):
+		var icon := TextureRect.new()
+		icon.texture = load(icon_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.custom_minimum_size = Vector2(18, 18)
+		icon.modulate = fg
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(icon)
 	var lbl := Label.new()
 	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", 15)
+	lbl.add_theme_font_size_override("font_size", 17)
 	lbl.add_theme_color_override("font_color", fg)
-	p.add_child(lbl)
+	row.add_child(lbl)
 	return lbl
 
 func _start_round() -> void:
@@ -356,8 +378,8 @@ func _process(delta: float) -> void:
 func _refresh_hud() -> void:
 	var m := int(_time_left) / 60
 	var s := int(_time_left) % 60
-	timer_label.text = "⏱ %d:%02d" % [m, s]
-	score_label.text = "★ %d XP" % _score
+	timer_label.text = "%d:%02d" % [m, s]
+	score_label.text = "%d XP" % _score
 	# Pulse the timer chip red when ≤ 30s remain.
 	if timer_chip != null:
 		if _time_left <= 30.0 and _running:

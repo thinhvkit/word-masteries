@@ -147,9 +147,29 @@ func _style_xp_pill() -> void:
 	xp_pill.add_theme_stylebox_override("panel", sb)
 	xp_label.add_theme_color_override("font_color", GOLD_DEEP)
 	xp_label.add_theme_font_size_override("font_size", 13)
+	# Replace the original Label child with an HBox: star icon + label.
+	var parent := xp_label.get_parent() as Control
+	var idx := xp_label.get_index()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 5)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	parent.add_child(row)
+	parent.move_child(row, idx)
+	var icon_path := "res://assets/icons/star.svg"
+	if ResourceLoader.exists(icon_path):
+		var icon := TextureRect.new()
+		icon.texture = load(icon_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.custom_minimum_size = Vector2(14, 14)
+		icon.modulate = GOLD_DEEP
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(icon)
+	xp_label.reparent(row, false)
 
 func _refresh_xp() -> void:
-	xp_label.text = "★ %d XP" % GameState.total_xp
+	xp_label.text = "%d XP" % GameState.total_xp
 
 # ---------------- row card ----------------
 
