@@ -1,7 +1,7 @@
 extends Control
 ## Word Match — 6–8 letters in a circle, drag to form words.
 
-const LETTER_SCENE_SIZE := 64.0
+const LETTER_SCENE_SIZE := 84.0
 const ROUND_TIME_SEC := 120.0
 const MIN_WORD_LEN := 3
 
@@ -23,6 +23,7 @@ const POOLS_8 := [
 
 const UI := preload("res://scripts/results_ui.gd")
 const Chrome := preload("res://scripts/screen_chrome.gd")
+const Fx := preload("res://games/word_fight/fx.gd")
 
 const BLUE_LIGHT := Color("#dceaf2")
 const BLUE_DARK := Color("#3d8bb5")
@@ -31,15 +32,30 @@ const GOLD_DARK := Color("#b48218")
 const CURRENT_BG := Color("#e8f0f6")
 const CURRENT_BORDER := Color("#a8c8de")
 
+# Vibrant tokens matching the board / Word Fight FX.
+const VIBRANT_BLUE := Color("#3aa8ff")
+const VIBRANT_BLUE_DARK := Color("#0f5e9c")
+const VIBRANT_GOLD := Color("#ffd027")
+const VIBRANT_GOLD_DARK := Color("#7a4a00")
+const VIBRANT_MAGENTA := Color("#ff3aa8")
+const VIBRANT_MAGENTA_DARK := Color("#7a0e4a")
+const DARK_CARD := Color("#1a1240")
+const DARK_CARD_BORDER := Color("#3a2a78")
+
 var letters_holder: Control
+var board_bg: Control
 var preview_label: Label
 var score_label: Label
 var timer_label: Label
+var timer_chip: Control
 var found_label: Label
 var found_pills_row: HFlowContainer
 var line: Line2D
+var line_glow: Line2D
 var back_btn: Button
 var toast: Label
+var word_card: PanelContainer
+var _line_phase: float = 0.0
 
 var _letters: Array[WMLetter] = []
 var _chain: Array[WMLetter] = []   # ordered nodes selected
@@ -56,7 +72,7 @@ func _ready() -> void:
 	_build_ui()
 	back_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	line.width = 8
-	line.default_color = Color(Palette.PINK.r, Palette.PINK.g, Palette.PINK.b, 0.6)
+	line.default_color = Color(1.0, 0.45, 0.75, 0.9)
 	line.joint_mode = Line2D.LINE_JOINT_ROUND
 	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	line.end_cap_mode = Line2D.LINE_CAP_ROUND
@@ -81,27 +97,28 @@ func _build_ui() -> void:
 	# Timer + XP chips row.
 	var hud := HBoxContainer.new()
 	hud.add_theme_constant_override("separation", 12)
-	timer_label = _hud_chip("⏱ 2:00", BLUE_LIGHT, BLUE_DARK)
-	hud.add_child(timer_label.get_parent())
+	timer_label = _hud_chip("⏱ 2:00", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK)
+	timer_chip = timer_label.get_parent() as Control
+	hud.add_child(timer_chip)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hud.add_child(spacer)
-	score_label = _hud_chip("★ 0 XP", GOLD_LIGHT, GOLD_DARK)
+	score_label = _hud_chip("★ 0 XP", VIBRANT_GOLD, VIBRANT_GOLD_DARK, Color("#dba830"))
 	hud.add_child(score_label.get_parent())
 	top.add_child(hud)
 
-	# Found-words card (white rounded card with shadow, summary + hint inside).
+	# Found-words card — dark vibrant card matching the board palette.
 	var found_card := PanelContainer.new()
 	var found_sb := StyleBoxFlat.new()
-	found_sb.bg_color = Chrome.SURFACE
-	found_sb.set_corner_radius_all(14)
-	found_sb.set_border_width_all(1)
-	found_sb.border_color = Chrome.BORDER
-	found_sb.shadow_color = Color(0, 0, 0, 0.05)
-	found_sb.shadow_size = 3
-	found_sb.shadow_offset = Vector2i(0, 1)
-	found_sb.content_margin_left = 14
-	found_sb.content_margin_right = 14
+	found_sb.bg_color = DARK_CARD
+	found_sb.set_corner_radius_all(18)
+	found_sb.set_border_width_all(2)
+	found_sb.border_color = DARK_CARD_BORDER
+	found_sb.shadow_color = Color(0, 0, 0, 0.25)
+	found_sb.shadow_size = 6
+	found_sb.shadow_offset = Vector2i(0, 3)
+	found_sb.content_margin_left = 16
+	found_sb.content_margin_right = 16
 	found_sb.content_margin_top = 12
 	found_sb.content_margin_bottom = 12
 	found_card.add_theme_stylebox_override("panel", found_sb)
@@ -109,13 +126,13 @@ func _build_ui() -> void:
 	found_box.add_theme_constant_override("separation", 4)
 	found_label = Label.new()
 	found_label.text = "Found: 0"
-	found_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	found_label.add_theme_font_size_override("font_size", 13)
+	found_label.add_theme_color_override("font_color", Color("#ffd027"))
+	found_label.add_theme_font_size_override("font_size", 14)
 	found_box.add_child(found_label)
 	var hint := Label.new()
 	hint.text = "Drag to form words!"
-	hint.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	hint.add_theme_font_size_override("font_size", 15)
 	found_box.add_child(hint)
 	found_pills_row = HFlowContainer.new()
 	found_pills_row.add_theme_constant_override("h_separation", 6)
@@ -124,23 +141,41 @@ func _build_ui() -> void:
 	found_card.add_child(found_box)
 	top.add_child(found_card)
 
-	# Current-word pill (light-blue rounded bar, matching the design).
-	var word_card := PanelContainer.new()
+	# Current-word pill — vibrant magenta, mirrors the drag line / selected tiles.
+	word_card = PanelContainer.new()
 	var word_sb := StyleBoxFlat.new()
-	word_sb.bg_color = CURRENT_BG
-	word_sb.set_corner_radius_all(22)
-	word_sb.set_border_width_all(2)
-	word_sb.border_color = CURRENT_BORDER
-	word_sb.content_margin_top = 12
-	word_sb.content_margin_bottom = 12
+	word_sb.bg_color = VIBRANT_MAGENTA
+	word_sb.set_corner_radius_all(24)
+	word_sb.set_border_width_all(3)
+	word_sb.border_color = VIBRANT_MAGENTA_DARK
+	word_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.45)
+	word_sb.shadow_size = 10
+	word_sb.shadow_offset = Vector2i(0, 3)
+	word_sb.content_margin_top = 14
+	word_sb.content_margin_bottom = 14
 	word_card.add_theme_stylebox_override("panel", word_sb)
 	preview_label = Label.new()
-	preview_label.text = ""
+	preview_label.text = "—"
 	preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	preview_label.add_theme_color_override("font_color", BLUE_DARK)
-	preview_label.add_theme_font_size_override("font_size", 22)
+	preview_label.add_theme_color_override("font_color", Color.WHITE)
+	preview_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
+	preview_label.add_theme_constant_override("outline_size", 4)
+	preview_label.add_theme_font_size_override("font_size", 24)
 	word_card.add_child(preview_label)
 	top.add_child(word_card)
+
+	# Animated vibrant backdrop behind the letter ring (Word Fight style).
+	board_bg = _AnimatedBoardBG.new()
+	board_bg.anchor_left = 0.5
+	board_bg.anchor_top = 1.0
+	board_bg.anchor_right = 0.5
+	board_bg.anchor_bottom = 1.0
+	board_bg.offset_left = -222
+	board_bg.offset_top = -452
+	board_bg.offset_right = 222
+	board_bg.offset_bottom = -8
+	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(board_bg)
 
 	# Letters holder, anchored to bottom-center.
 	letters_holder = Control.new()
@@ -148,14 +183,21 @@ func _build_ui() -> void:
 	letters_holder.anchor_top = 1.0
 	letters_holder.anchor_right = 0.5
 	letters_holder.anchor_bottom = 1.0
-	letters_holder.offset_left = -180
-	letters_holder.offset_top = -380
-	letters_holder.offset_right = 180
+	letters_holder.offset_left = -210
+	letters_holder.offset_top = -440
+	letters_holder.offset_right = 210
 	letters_holder.offset_bottom = -20
 	letters_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(letters_holder)
 
-	# Drag line (sibling so it draws above letters_holder children).
+	# Drag line — glow underlay + bright magenta core (sibling so it draws above letters).
+	line_glow = Line2D.new()
+	line_glow.width = 18
+	line_glow.default_color = Color(1, 1, 1, 0.35)
+	line_glow.joint_mode = Line2D.LINE_JOINT_ROUND
+	line_glow.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line_glow.end_cap_mode = Line2D.LINE_CAP_ROUND
+	add_child(line_glow)
 	line = Line2D.new()
 	add_child(line)
 
@@ -188,20 +230,26 @@ func _build_ui() -> void:
 	footer.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	add_child(footer)
 
-func _hud_chip(text: String, bg: Color, fg: Color) -> Label:
+func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0, 0)) -> Label:
 	# Returns the inner Label so the caller can update text; parented PanelContainer is added.
 	var p := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.set_corner_radius_all(99)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 7
+	sb.content_margin_bottom = 7
+	sb.shadow_color = Color(0, 0, 0, 0.22)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2i(0, 2)
+	if border.a > 0:
+		sb.set_border_width_all(2)
+		sb.border_color = border
 	p.add_theme_stylebox_override("panel", sb)
 	var lbl := Label.new()
 	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 15)
 	lbl.add_theme_color_override("font_color", fg)
 	p.add_child(lbl)
 	return lbl
@@ -231,7 +279,7 @@ func _start_round() -> void:
 	_layout_letters()
 	_refresh_hud()
 	_refresh_found()
-	preview_label.text = ""
+	preview_label.text = "—"
 
 func _pick_pool() -> String:
 	var src: Array
@@ -254,8 +302,13 @@ func _spawn_letters(pool: String) -> void:
 	for ch: String in arr:
 		var n: WMLetter = Letter.new()
 		n.letter = ch
+		n.letter_selected_fx.connect(_on_letter_selected_fx)
 		letters_holder.add_child(n)
 		_letters.append(n)
+
+func _on_letter_selected_fx(node: WMLetter, color: Color) -> void:
+	var pos := node.global_position + node.size * 0.5 - global_position
+	Fx.sparkle_burst(self, pos, color, 8)
 
 func _count_vowels(arr: Array) -> int:
 	var v := 0
@@ -283,8 +336,15 @@ func _layout_letters() -> void:
 		var pos := center + Vector2(cos(angle), sin(angle)) * radius
 		var node := _letters[i]
 		node.position = pos - Vector2(LETTER_SCENE_SIZE, LETTER_SCENE_SIZE) * 0.5
+		node.play_pop_in(i * 0.05)
 
 func _process(delta: float) -> void:
+	# Pulse the drag line continuously while it has points.
+	_line_phase += delta * 4.0
+	if line != null and line.get_point_count() > 0:
+		var pulse: float = 0.7 + 0.3 * (0.5 + 0.5 * sin(_line_phase))
+		line.default_color = Color(1.0, 0.45, 0.75, pulse)
+		line.width = 8 + 2 * sin(_line_phase * 0.6)
 	if not _running:
 		return
 	_time_left -= delta
@@ -298,6 +358,13 @@ func _refresh_hud() -> void:
 	var s := int(_time_left) % 60
 	timer_label.text = "⏱ %d:%02d" % [m, s]
 	score_label.text = "★ %d XP" % _score
+	# Pulse the timer chip red when ≤ 30s remain.
+	if timer_chip != null:
+		if _time_left <= 30.0 and _running:
+			var pulse: float = 0.65 + 0.35 * sin(Engine.get_process_frames() * 0.18)
+			timer_chip.modulate = Color(1.0, pulse, pulse, 1.0)
+		else:
+			timer_chip.modulate = Color(1, 1, 1, 1)
 
 func _refresh_found() -> void:
 	found_label.text = "Found: %d" % _found.size()
@@ -307,7 +374,7 @@ func _refresh_found() -> void:
 	if _found.is_empty():
 		return
 	for w: String in _found_order:
-		found_pills_row.add_child(UI.pill(w, Color("#e6f5ea"), Palette.SAGE_DARK))
+		found_pills_row.add_child(UI.pill(w, Color("#ffd027"), Color("#3a2a78")))
 
 # -------- input / drag chain --------
 
@@ -351,16 +418,23 @@ func _end_drag() -> void:
 		return
 	_is_dragging = false
 	line.clear_points()
+	line_glow.clear_points()
 	var word := _current_word()
+	# Capture chain positions for confetti BEFORE deselect.
+	var chain_positions: Array = []
+	var chain_colors: Array = []
 	for n in _chain:
+		chain_positions.append(n.global_position + n.size * 0.5 - global_position)
+		var g := Fx.gradient_for_letter(n.letter)
+		chain_colors.append(g[1])
 		n.selected = false
 	_chain.clear()
 	if word.length() < MIN_WORD_LEN:
 		_shake_feedback("Too short!")
-		preview_label.text = ""
+		preview_label.text = "—"
 		return
-	_submit(word)
-	preview_label.text = ""
+	_submit(word, chain_positions, chain_colors)
+	preview_label.text = "—"
 
 func _try_add_letter_at(gpos: Vector2) -> void:
 	for n in _letters:
@@ -374,11 +448,15 @@ func _try_add_letter_at(gpos: Vector2) -> void:
 
 func _update_line(cursor_gpos: Vector2) -> void:
 	line.clear_points()
+	line_glow.clear_points()
 	for n in _chain:
 		var center := n.global_position + n.size * 0.5
-		line.add_point(line.to_local(center))
+		var pt := line.to_local(center)
+		line.add_point(pt)
+		line_glow.add_point(line_glow.to_local(center))
 	if _is_dragging:
 		line.add_point(line.to_local(cursor_gpos))
+		line_glow.add_point(line_glow.to_local(cursor_gpos))
 
 func _current_word() -> String:
 	var s := ""
@@ -387,11 +465,12 @@ func _current_word() -> String:
 	return s
 
 func _update_preview() -> void:
-	preview_label.text = _current_word()
+	var w := _current_word()
+	preview_label.text = w if not w.is_empty() else "—"
 
 # -------- scoring --------
 
-func _submit(word_upper: String) -> void:
+func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Array = []) -> void:
 	var word := word_upper.to_lower()
 	if _found.has(word):
 		_shake_feedback("Already found")
@@ -409,8 +488,27 @@ func _submit(word_upper: String) -> void:
 	_refresh_found()
 	_show_toast("+%d XP   %s" % [earned, word_upper], Palette.GREEN)
 
+	# ----- WIN FX -----
+	var big := word.length() >= 5
+	if board_bg != null:
+		var popup_pos := board_bg.global_position + Vector2(board_bg.size.x * 0.5 - 20, -10) - global_position
+		Fx.score_popup(self, popup_pos, "+%d" % earned, big, Color("#ffd027"))
+	# Confetti from each chain letter toward the score chip (top-right).
+	if score_label != null and not chain_positions.is_empty():
+		var chip := score_label.get_parent() as Control
+		var target: Vector2 = chip.global_position + chip.size * 0.5 - global_position
+		Fx.confetti_to(self, chain_positions, target, chain_colors)
+	if big:
+		Fx.banner(self, word_upper, Color("#ff3aa8"), Color.WHITE)
+		Fx.shake(self, 3.0, 0.2)
+		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.35))
+
 func _shake_feedback(msg: String) -> void:
 	_show_toast(msg, Palette.RED)
+	if letters_holder != null:
+		Fx.shake(letters_holder, 7.0, 0.3)
+	if word_card != null:
+		Fx.shake(word_card, 5.0, 0.25)
 
 func _show_toast(msg: String, color: Color) -> void:
 	toast.text = msg
@@ -442,3 +540,60 @@ func _end_round() -> void:
 	# Brief pause so the player sees the "Time!" message before transitioning.
 	await get_tree().create_timer(0.8).timeout
 	get_tree().change_scene_to_file("res://games/word_match/results.tscn")
+
+# ---------------- inner class: animated vibrant backdrop ----------------
+class _AnimatedBoardBG extends Control:
+	var _t: float = 0.0
+	func _ready() -> void:
+		set_process(true)
+		clip_contents = true
+	func _process(delta: float) -> void:
+		_t += delta * 0.4
+		queue_redraw()
+	func _draw() -> void:
+		var palette := [
+			Color("#3aa8ff"), Color("#7a55ff"), Color("#ff3aa8"),
+			Color("#ff7a1f"), Color("#ffd027"), Color("#3ad6a8"),
+		]
+		var radius := 28.0
+		# Base.
+		_round_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.12, 1), radius)
+		# Animated radial bands.
+		var center := size * 0.5
+		var max_r: float = center.length()
+		var rings := 18
+		for i in rings:
+			var t0: float = float(i) / float(rings)
+			var t1: float = float(i + 1) / float(rings)
+			var phase: float = fmod(t0 + _t, 1.0) * palette.size()
+			var idx: int = int(phase) % palette.size()
+			var nxt: int = (idx + 1) % palette.size()
+			var f: float = phase - floor(phase)
+			var col: Color = palette[idx].lerp(palette[nxt], f)
+			col.a = 0.42
+			# Annular band: draw outer circle at r1, then inner punch via inverted overdraw isn't ideal —
+			# instead draw thin filled arc bands using draw_circle with shrinking radii in alpha order.
+			var r1: float = lerpf(max_r * 1.1, 0.0, t1)
+			draw_circle(center, r1, col)
+		# Soft inner overlay to dim the very center for letter contrast.
+		draw_circle(center, max_r * 0.42, Color(0.08, 0.05, 0.18, 0.55))
+		# Outline.
+		_outline(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.25), radius, 2.0)
+	func _round_rect(rect: Rect2, color: Color, radius: float) -> void:
+		var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
+		draw_rect(Rect2(rect.position + Vector2(r, 0), Vector2(rect.size.x - 2*r, rect.size.y)), color)
+		draw_rect(Rect2(rect.position + Vector2(0, r), Vector2(rect.size.x, rect.size.y - 2*r)), color)
+		draw_circle(rect.position + Vector2(r, r), r, color)
+		draw_circle(rect.position + Vector2(rect.size.x - r, r), r, color)
+		draw_circle(rect.position + Vector2(r, rect.size.y - r), r, color)
+		draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, color)
+	func _outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
+		var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
+		draw_line(rect.position + Vector2(r, 0), rect.position + Vector2(rect.size.x - r, 0), color, width)
+		draw_line(rect.position + Vector2(r, rect.size.y), rect.position + Vector2(rect.size.x - r, rect.size.y), color, width)
+		draw_line(rect.position + Vector2(0, r), rect.position + Vector2(0, rect.size.y - r), color, width)
+		draw_line(rect.position + Vector2(rect.size.x, r), rect.position + Vector2(rect.size.x, rect.size.y - r), color, width)
+		draw_arc(rect.position + Vector2(r, r), r, PI, PI * 1.5, 16, color, width)
+		draw_arc(rect.position + Vector2(rect.size.x - r, r), r, -PI * 0.5, 0, 16, color, width)
+		draw_arc(rect.position + Vector2(r, rect.size.y - r), r, PI * 0.5, PI, 16, color, width)
+		draw_arc(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, 0, PI * 0.5, 16, color, width)

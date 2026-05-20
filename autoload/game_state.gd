@@ -9,6 +9,7 @@ enum Mode { INTERMEDIATE, ADVANCED }
 const SAVE_PATH := "user://masteries.save"
 
 var player_name: String = ""
+var player_avatar: String = "butterfly"   # id under res://assets/avatars/<id>.svg
 var mode: int = Mode.INTERMEDIATE
 var total_xp: int = 0
 var per_game_xp: Dictionary = {}  # game_id -> int
@@ -66,6 +67,7 @@ func save() -> void:
 		return
 	var data := {
 		"player_name": player_name,
+		"player_avatar": player_avatar,
 		"mode": mode,
 		"total_xp": total_xp,
 		"per_game_xp": per_game_xp,
@@ -82,6 +84,7 @@ func load_save() -> void:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return
 	player_name = parsed.get("player_name", "")
+	player_avatar = parsed.get("player_avatar", "butterfly")
 	mode = parsed.get("mode", Mode.INTERMEDIATE)
 	total_xp = parsed.get("total_xp", 0)
 	per_game_xp = parsed.get("per_game_xp", {})

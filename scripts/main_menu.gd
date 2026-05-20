@@ -38,9 +38,10 @@ func _ready() -> void:
 	move_child(bg, 0)
 
 	var who := GameState.player_name if not GameState.player_name.is_empty() else "there"
-	greet.text = "Hi, %s %s" % [who, AVATAR_EMOJI]
+	greet.text = "Hi, %s" % who
 	greet.add_theme_color_override("font_color", TEXT)
 	greet.add_theme_font_size_override("font_size", 22)
+	_insert_avatar_chip()
 	_style_xp_pill()
 	_refresh_xp()
 
@@ -69,6 +70,38 @@ func _insert_mode_row() -> void:
 	v.add_child(row)
 	# Place right after the header (index 0).
 	v.move_child(row, 1)
+
+func _insert_avatar_chip() -> void:
+	# Round colored badge with the player's chosen SVG avatar at the front of the greeting row.
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(44, 44)
+	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var bg_panel := Panel.new()
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("#ffe9d4")
+	sb.set_corner_radius_all(22)
+	sb.shadow_color = Color(0, 0, 0, 0.10)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2i(0, 1)
+	bg_panel.add_theme_stylebox_override("panel", sb)
+	holder.add_child(bg_panel)
+	var icon := TextureRect.new()
+	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
+	if ResourceLoader.exists(path):
+		icon.texture = load(path)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 4
+	icon.offset_top = 4
+	icon.offset_right = -4
+	icon.offset_bottom = -4
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(icon)
+	var hdr := $V/Header as HBoxContainer
+	hdr.add_child(holder)
+	hdr.move_child(holder, 0)
 
 func _chip(text: String, bg: Color, fg: Color, clickable: bool) -> Button:
 	var b := Button.new()

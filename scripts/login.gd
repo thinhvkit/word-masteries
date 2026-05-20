@@ -40,6 +40,9 @@ func _ready() -> void:
 	if not GameState.player_name.is_empty():
 		name_edit.text = GameState.player_name
 		_refresh_name()
+	var saved_idx := AVATARS.find(GameState.player_avatar)
+	if saved_idx >= 0:
+		_avatar_idx = saved_idx
 	name_edit.text_changed.connect(func(_t): _refresh_name())
 	name_edit.text_submitted.connect(func(_t): _try_continue())
 	continue_btn.pressed.connect(_try_continue)
@@ -178,6 +181,7 @@ func _try_continue() -> void:
 	if n.is_empty():
 		return
 	GameState.player_name = n
+	GameState.player_avatar = AVATARS[_avatar_idx]
 	GameState.save()
 	get_tree().change_scene_to_file("res://scenes/mode_select.tscn")
 

@@ -7,13 +7,11 @@ const Chrome := preload("res://scripts/screen_chrome.gd")
 # Enemy roster mirrors word_fight.gd. Kept here so intro can render
 # before instantiating the gameplay scene.
 const ENEMIES := [
-	{"name": "Wriggles Jr.", "hp": 80,  "emoji": "🐛"},
-	{"name": "Spelluga",     "hp": 120, "emoji": "🐢"},
-	{"name": "Verbosaur",    "hp": 160, "emoji": "🦖"},
-	{"name": "Lexigon",      "hp": 220, "emoji": "🐉"},
+	{"name": "Wriggles Jr.", "hp": 80,  "avatar": "wriggles_jr"},
+	{"name": "Spelluga",     "hp": 120, "avatar": "spelluga"},
+	{"name": "Verbosaur",    "hp": 160, "avatar": "verbosaur"},
+	{"name": "Lexigon",      "hp": 220, "avatar": "lexigon"},
 ]
-
-const PLAYER_EMOJI := "🦋"
 const SAGE := Color("#a7d99a")
 const PINK := Color("#e07a8c")
 const PINK_DARK := Color("#c95e74")
@@ -71,13 +69,13 @@ func _build_ui(round_num: int, enemy: Dictionary, topic: String) -> void:
 	vs.alignment = BoxContainer.ALIGNMENT_CENTER
 	vs.add_theme_constant_override("separation", 28)
 	var player_name := GameState.player_name if GameState.player_name != "" else "You"
-	vs.add_child(_avatar(player_name, PLAYER_EMOJI, SAGE))
+	vs.add_child(_avatar(player_name, "res://assets/avatars/%s.svg" % GameState.player_avatar, SAGE))
 	var vs_lbl := Label.new()
 	vs_lbl.text = "VS"
 	vs_lbl.add_theme_font_size_override("font_size", 24)
 	vs_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	vs.add_child(vs_lbl)
-	vs.add_child(_avatar(enemy.name, enemy.emoji, PINK))
+	vs.add_child(_avatar(enemy.name, "res://assets/avatars/%s.svg" % str(enemy.avatar), PINK))
 	body.add_child(vs)
 
 	body.add_child(_topic_card(topic))
@@ -97,29 +95,34 @@ func _build_ui(round_num: int, enemy: Dictionary, topic: String) -> void:
 	# Push body content toward vertical center.
 	body.add_child(_flex())
 
-func _avatar(name: String, emoji: String, bg: Color) -> Control:
+func _avatar(name: String, svg_path: String, bg: Color) -> Control:
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 6)
 
 	var circle := Panel.new()
-	circle.custom_minimum_size = Vector2(72, 72)
+	circle.custom_minimum_size = Vector2(80, 80)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(36)
-	sb.shadow_color = Color(0, 0, 0, 0.10)
-	sb.shadow_size = 4
+	sb.set_corner_radius_all(40)
+	sb.shadow_color = Color(0, 0, 0, 0.12)
+	sb.shadow_size = 5
 	sb.shadow_offset = Vector2i(0, 2)
 	circle.add_theme_stylebox_override("panel", sb)
 	box.add_child(circle)
 
-	var emoji_lbl := Label.new()
-	emoji_lbl.text = emoji
-	emoji_lbl.add_theme_font_size_override("font_size", 34)
-	emoji_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	emoji_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	emoji_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	circle.add_child(emoji_lbl)
+	if ResourceLoader.exists(svg_path):
+		var icon := TextureRect.new()
+		icon.texture = load(svg_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.offset_left = 6
+		icon.offset_top = 6
+		icon.offset_right = -6
+		icon.offset_bottom = -6
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		circle.add_child(icon)
 
 	var name_lbl := Label.new()
 	name_lbl.text = name

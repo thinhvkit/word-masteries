@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- Wriggles Jr. — a tiny grub/worm enemy. Soft lime green segmented body. -->
+  <!-- Body segments (back to front for depth) -->
+  <ellipse cx="26" cy="78" rx="14" ry="13" fill="#7fd47a"/>
+  <ellipse cx="44" cy="72" rx="16" ry="15" fill="#8fdb8a"/>
+  <ellipse cx="64" cy="66" rx="18" ry="17" fill="#9fe39a"/>
+  <ellipse cx="86" cy="60" rx="22" ry="22" fill="#aeebab"/>
+  <!-- Segment shading lines -->
+  <path d="M34,80 Q30,90 26,90" stroke="#5fb45a" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+  <path d="M53,76 Q50,87 47,87" stroke="#5fb45a" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+  <path d="M74,72 Q72,84 69,84" stroke="#5fb45a" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+  <!-- Belly highlight on head -->
+  <ellipse cx="86" cy="68" rx="14" ry="9" fill="#d8f5d3" opacity="0.7"/>
+  <!-- Antennae -->
+  <path d="M78,40 Q72,28 76,18" stroke="#5fb45a" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M94,40 Q100,28 96,18" stroke="#5fb45a" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <circle cx="76" cy="16" r="3.5" fill="#ff8faa"/>
+  <circle cx="96" cy="16" r="3.5" fill="#ff8faa"/>
+  <!-- Eyes (big, on the head segment) -->
+  <circle cx="80" cy="56" r="7" fill="#ffffff"/>
+  <circle cx="98" cy="56" r="7" fill="#ffffff"/>
+  <circle cx="80" cy="58" r="3.6" fill="#1a1a2e"/>
+  <circle cx="98" cy="58" r="3.6" fill="#1a1a2e"/>
+  <circle cx="81.5" cy="56" r="1.4" fill="#ffffff"/>
+  <circle cx="99.5" cy="56" r="1.4" fill="#ffffff"/>
+  <!-- Cheeks -->
+  <circle cx="76" cy="70" r="3" fill="#ff8faa" opacity="0.55"/>
+  <circle cx="104" cy="68" r="3" fill="#ff8faa" opacity="0.55"/>
+  <!-- Tiny smile -->
+  <path d="M86,70 Q90,74 94,70" stroke="#3a6a36" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>
