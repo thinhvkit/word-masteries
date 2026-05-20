@@ -562,7 +562,7 @@ func _submit_player_word() -> void:
 
 	var tag := ""
 	if topic_match: tag += "  ×2 TOPIC!"
-	if rainbow_used: tag += "  🌈 ×%d!" % RAINBOW_DAMAGE_MULT
+	if rainbow_used: tag += "  RAINBOW ×%d!" % RAINBOW_DAMAGE_MULT
 	_flash_hit("%s for %d dmg%s" % [word_up, dmg, tag])
 
 	# ----- HIT FX -----
@@ -826,7 +826,8 @@ func _flash_invalid(s: String) -> void:
 	_flash_status(s, Color(0.85, 0.15, 0.15))
 	# Big, unmissable feedback in the Current Word label.
 	var prev_text := current_word_label.text
-	current_word_label.text = "✗ " + s
+	# Red color + horizontal shake already convey invalidity; no glyph prefix.
+	current_word_label.text = s
 	current_word_label.add_theme_color_override("font_color", Color(0.85, 0.15, 0.15))
 	current_word_label.modulate = Color(1, 1, 1)
 	# Shake horizontally.

@@ -20,7 +20,7 @@ func _build_ui(s: Dictionary) -> void:
 	body.add_theme_constant_override("separation", 16)
 	add_child(body)
 
-	body.add_child(UI.center_label("💔", 56, Palette.TEXT))
+	body.add_child(_center_svg("res://assets/icons/heart_broken.svg", 96))
 	body.add_child(UI.center_label("Defeated!", 32, Palette.TERRACOTTA))
 	var enemy_name: String = str(s.get("enemy_name", ""))
 	body.add_child(UI.center_label("%s was too strong this time" % enemy_name, 18, Palette.TEXT_SECONDARY))
@@ -56,3 +56,15 @@ func _on_retry() -> void:
 
 func _on_back() -> void:
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+func _center_svg(path: String, size_px: int) -> Control:
+	var holder := CenterContainer.new()
+	if ResourceLoader.exists(path):
+		var tex := TextureRect.new()
+		tex.texture = load(path)
+		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tex.custom_minimum_size = Vector2(size_px, size_px)
+		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(tex)
+	return holder

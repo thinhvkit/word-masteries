@@ -57,9 +57,10 @@ func _ready() -> void:
 	cards_row.size_flags_vertical = Control.SIZE_FILL
 
 	var who := GameState.player_name if not GameState.player_name.is_empty() else "there"
-	greet.text = "Hi, %s! 👋" % who
+	greet.text = "Hi, %s!" % who
 	greet.add_theme_font_size_override("font_size", 28)
 	greet.add_theme_color_override("font_color", TEXT)
+	_prepend_icon_to_label(greet, "res://assets/icons/wave.svg", TEXT, 22)
 	sub.text = "Choose your difficulty. This applies to all games."
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", TEXT_SEC)
@@ -207,10 +208,17 @@ func _style_tip() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	tip.add_child(row)
-	var emoji := Label.new()
-	emoji.text = "💡"
-	emoji.add_theme_font_size_override("font_size", 20)
-	row.add_child(emoji)
+	var bulb_path := "res://assets/icons/bulb.svg"
+	if ResourceLoader.exists(bulb_path):
+		var bulb := TextureRect.new()
+		bulb.texture = load(bulb_path)
+		bulb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bulb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bulb.custom_minimum_size = Vector2(22, 22)
+		bulb.modulate = TEXT
+		bulb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		bulb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(bulb)
 	var t := Label.new()
 	t.text = "Not sure? Start with Intermediate — you can switch anytime in Settings."
 	t.add_theme_font_size_override("font_size", 13)
@@ -218,6 +226,30 @@ func _style_tip() -> void:
 	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(t)
+
+func _prepend_icon_to_label(lbl: Label, icon_path: String, tint: Color, size_px: int) -> void:
+	# Reparent the label into a centered HBox alongside a tinted SVG icon.
+	if not ResourceLoader.exists(icon_path):
+		return
+	var parent := lbl.get_parent() as Control
+	if parent == null:
+		return
+	var idx := lbl.get_index()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	parent.add_child(row)
+	parent.move_child(row, idx)
+	lbl.reparent(row, false)
+	var icon := TextureRect.new()
+	icon.texture = load(icon_path)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.custom_minimum_size = Vector2(size_px, size_px)
+	icon.modulate = tint
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon)
 
 class _Dot extends Control:
 	var color: Color = Color.WHITE :

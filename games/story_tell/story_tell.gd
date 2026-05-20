@@ -229,12 +229,27 @@ func _score_card(i: int) -> Control:
 	you.add_theme_font_size_override("font_size", 13)
 	you.add_theme_color_override("font_color", Chrome.TEXT)
 	box.add_child(you)
+	var sample_row := HBoxContainer.new()
+	sample_row.add_theme_constant_override("separation", 6)
+	box.add_child(sample_row)
+	var bulb_path := "res://assets/icons/bulb.svg"
+	if ResourceLoader.exists(bulb_path):
+		var bulb := TextureRect.new()
+		bulb.texture = load(bulb_path)
+		bulb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bulb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bulb.custom_minimum_size = Vector2(16, 16)
+		bulb.modulate = BLUE
+		bulb.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		bulb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sample_row.add_child(bulb)
 	var sample := Label.new()
-	sample.text = '💡 Sample: "%s"' % s.sample
+	sample.text = 'Sample: "%s"' % s.sample
 	sample.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sample.add_theme_font_size_override("font_size", 12)
 	sample.add_theme_color_override("font_color", BLUE)
-	box.add_child(sample)
+	sample.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sample_row.add_child(sample)
 	return card
 
 func _clear_body() -> void:

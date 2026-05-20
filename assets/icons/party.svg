@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- Party popper / confetti cone celebration icon. -->
+  <!-- Cone -->
+  <path d="M28 92 L58 36 L88 76 Z" fill="#ff7a1f" stroke="#8c1f2c" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M44 64 L72 56" stroke="#8c1f2c" stroke-width="2.5" opacity="0.45"/>
+  <path d="M50 74 L78 66" stroke="#8c1f2c" stroke-width="2.5" opacity="0.45"/>
+  <!-- Confetti streamers -->
+  <path d="M88 76 Q104 60 102 36" stroke="#3aa8ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M88 76 Q108 80 112 64" stroke="#ffd027" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M88 76 Q104 90 96 108" stroke="#3ad6a8" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- Confetti chips -->
+  <rect x="74" y="20" width="8" height="5" fill="#ff3aa8" transform="rotate(20 78 22)"/>
+  <rect x="94" y="42" width="8" height="5" fill="#7a55ff" transform="rotate(-30 98 44)"/>
+  <rect x="104" y="86" width="8" height="5" fill="#ffd027" transform="rotate(40 108 88)"/>
+  <rect x="86" y="100" width="8" height="5" fill="#3aa8ff" transform="rotate(-15 90 102)"/>
+  <circle cx="68" cy="14" r="3.5" fill="#3ad6a8"/>
+  <circle cx="108" cy="22" r="3" fill="#ff3aa8"/>
+  <circle cx="116" cy="50" r="3" fill="#ffd027"/>
+  <!-- Sparkle accents -->
+  <path d="M52 18 L54 22 L58 24 L54 26 L52 30 L50 26 L46 24 L50 22 Z" fill="#ffd027"/>
+  <path d="M22 60 L24 64 L28 66 L24 68 L22 72 L20 68 L16 66 L20 64 Z" fill="#ff3aa8"/>
+</svg>

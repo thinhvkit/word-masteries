@@ -74,13 +74,28 @@ func _build_form() -> void:
 	img_sb.set_border_width_all(2)
 	img_sb.border_color = TEAL
 	img_card.add_theme_stylebox_override("panel", img_sb)
+	# Centered row: palette icon + scene label.
+	var img_row := HBoxContainer.new()
+	img_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	img_row.add_theme_constant_override("separation", 8)
+	img_row.set_anchors_preset(Control.PRESET_CENTER)
+	img_card.add_child(img_row)
+	var palette_path := "res://assets/icons/palette.svg"
+	if ResourceLoader.exists(palette_path):
+		var palette_icon := TextureRect.new()
+		palette_icon.texture = load(palette_path)
+		palette_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		palette_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		palette_icon.custom_minimum_size = Vector2(22, 22)
+		palette_icon.modulate = TEAL_DARK
+		palette_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		palette_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		img_row.add_child(palette_icon)
 	var img_lbl := Label.new()
-	img_lbl.text = "🎨  %s" % _scene_data.label
-	img_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	img_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	img_lbl.text = _scene_data.label
 	img_lbl.add_theme_font_size_override("font_size", 14)
 	img_lbl.add_theme_color_override("font_color", TEAL_DARK)
-	img_card.add_child(img_lbl)
+	img_row.add_child(img_lbl)
 	_body.add_child(img_card)
 
 	var heading := Label.new()
@@ -212,12 +227,27 @@ func _score_card(i: int, s: Dictionary) -> Control:
 	you.add_theme_font_size_override("font_size", 13)
 	you.add_theme_color_override("font_color", Chrome.TEXT)
 	box.add_child(you)
+	var rec_row := HBoxContainer.new()
+	rec_row.add_theme_constant_override("separation", 6)
+	box.add_child(rec_row)
+	var rec_bulb := "res://assets/icons/bulb.svg"
+	if ResourceLoader.exists(rec_bulb):
+		var rb := TextureRect.new()
+		rb.texture = load(rec_bulb)
+		rb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		rb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rb.custom_minimum_size = Vector2(16, 16)
+		rb.modulate = TEAL_DARK
+		rb.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		rb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rec_row.add_child(rb)
 	var rec := Label.new()
-	rec.text = "💡 %s" % s.rec
+	rec.text = s.rec
 	rec.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rec.add_theme_font_size_override("font_size", 12)
 	rec.add_theme_color_override("font_color", TEAL_DARK)
-	box.add_child(rec)
+	rec.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rec_row.add_child(rec)
 	return card
 
 func _clear_body() -> void:

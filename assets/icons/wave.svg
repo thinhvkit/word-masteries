@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <!-- Waving hand: palm + four fingers + thumb. -->
+  <path d="M9 26
+           C6 23 6 17 10 13
+           L12 11 L12 8 C12 6 14 5 15 7
+           L15 11 L17 9 L17 6 C17 4 19 4 19 6
+           L19 12 L21 11 L21 8 C21 6 23 6 23 8
+           L23 14 L24 14 C26 14 27 16 26 18
+           L23 24 C22 26 20 27 18 27 L13 27
+           C11 27 10 27 9 26 Z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Motion lines -->
+  <path d="M26 4 L29 6" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M28 10 L31 11" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M27 16 L30 16" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+</svg>

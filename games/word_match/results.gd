@@ -63,11 +63,8 @@ func _build_ui(s: Dictionary) -> void:
 	if found_words.is_empty():
 		found_box.add_child(UI.center_label("No words this round — try again!", 13, Palette.TEXT_SECONDARY))
 	else:
-		# Annotate each pill with a ✓ to match the wireframe.
-		var marked: Array = []
-		for w in found_words:
-			marked.append(str(w) + " ✓")
-		found_box.add_child(UI.flow_pills(marked, Color("#e6f5ea"), Palette.SAGE_DARK))
+		# Found pills — text only; the green chip already signals "found".
+		found_box.add_child(UI.flow_pills(found_words, Color("#e6f5ea"), Palette.SAGE_DARK))
 	found_card.add_child(found_box)
 	body.add_child(found_card)
 
@@ -89,7 +86,7 @@ func _build_ui(s: Dictionary) -> void:
 		miss_card.add_child(miss_box)
 		body.add_child(miss_card)
 	else:
-		body.add_child(UI.center_label("You found every word possible! 🎉", 14, Palette.SAGE_DARK))
+		body.add_child(UI.center_label("You found every word possible!", 14, Palette.SAGE_DARK))
 
 	# Buttons
 	var play_btn := UI.primary_btn("Play Again")

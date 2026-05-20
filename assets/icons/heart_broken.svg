@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- Broken heart — two halves separated by a zigzag fissure. -->
+  <!-- Left half -->
+  <path d="M60 30
+           C52 18 30 16 22 32
+           C14 50 36 72 56 92
+           L52 70 L62 56 L52 44 Z"
+        fill="#e0394a" stroke="#5a0e18" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Right half (slightly offset to show the break) -->
+  <path d="M62 30
+           C70 18 92 16 100 32
+           C108 50 86 72 66 92
+           L70 70 L60 56 L70 44 Z"
+        fill="#e0394a" stroke="#5a0e18" stroke-width="3" stroke-linejoin="round"
+        transform="translate(4 2)"/>
+  <!-- Tear -->
+  <path d="M30 70 Q26 80 32 86 Q36 80 30 70 Z" fill="#3aa8ff" stroke="#0f5e9c" stroke-width="2"/>
+</svg>

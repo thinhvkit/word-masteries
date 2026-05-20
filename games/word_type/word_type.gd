@@ -430,7 +430,7 @@ func _form_row(form: String, pos: String, example: String, found: bool) -> Contr
 	top.add_child(word_lbl)
 	var chip_bg: Color = VIBRANT_GREEN if found else VIBRANT_MAGENTA
 	var chip_fg: Color = VIBRANT_GREEN_DARK if found else Color.WHITE
-	top.add_child(_vibrant_chip("✓ FOUND" if found else "MISSED", chip_bg, chip_fg, chip_bg.darkened(0.18)))
+	top.add_child(_status_chip(found, chip_bg, chip_fg))
 	row.add_child(top)
 	var ex := Label.new()
 	ex.text = example
@@ -439,6 +439,44 @@ func _form_row(form: String, pos: String, example: String, found: bool) -> Contr
 	ex.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(ex)
 	return row
+
+func _status_chip(found: bool, bg: Color, fg: Color) -> PanelContainer:
+	# Found = ✓ icon + "FOUND". Missed = ✗ icon + "MISSED".
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(99)
+	sb.set_border_width_all(2)
+	sb.border_color = bg.darkened(0.18)
+	sb.shadow_color = Color(0, 0, 0, 0.22)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2i(0, 2)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 14
+	sb.content_margin_top = 5
+	sb.content_margin_bottom = 5
+	p.add_theme_stylebox_override("panel", sb)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 5)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	p.add_child(row)
+	var icon_path := "res://assets/icons/check.svg" if found else "res://assets/icons/xmark.svg"
+	if ResourceLoader.exists(icon_path):
+		var icon := TextureRect.new()
+		icon.texture = load(icon_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.custom_minimum_size = Vector2(14, 14)
+		icon.modulate = fg
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(icon)
+	var lbl := Label.new()
+	lbl.text = "FOUND" if found else "MISSED"
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", fg)
+	row.add_child(lbl)
+	return p
 
 func _vibrant_chip(text: String, bg: Color, fg: Color, border: Color) -> PanelContainer:
 	var p := PanelContainer.new()

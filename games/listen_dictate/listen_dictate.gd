@@ -242,12 +242,27 @@ func _build_results(correct: bool, earned: int) -> void:
 	_clear_body()
 	DisplayServer.tts_stop() if DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH) else null
 
+	# Heading row: status icon + label.
+	var head_row := HBoxContainer.new()
+	head_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	head_row.add_theme_constant_override("separation", 10)
+	_body.add_child(head_row)
+	var head_icon_path: String = "res://assets/icons/check.svg" if correct else "res://assets/icons/xmark.svg"
+	if ResourceLoader.exists(head_icon_path):
+		var head_icon := TextureRect.new()
+		head_icon.texture = load(head_icon_path)
+		head_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		head_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		head_icon.custom_minimum_size = Vector2(30, 30)
+		head_icon.modulate = SAGE_DARK if correct else TERRA
+		head_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		head_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head_row.add_child(head_icon)
 	var head := Label.new()
-	head.text = "Correct! ✓" if correct else "Not quite!"
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.text = "Correct!" if correct else "Not quite!"
 	head.add_theme_font_size_override("font_size", 28)
 	head.add_theme_color_override("font_color", SAGE_DARK if correct else TERRA)
-	_body.add_child(head)
+	head_row.add_child(head)
 
 	# Letter comparison row.
 	var row := HBoxContainer.new()

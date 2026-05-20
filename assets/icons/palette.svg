@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <!-- Artist palette: kidney shape + thumb hole + 4 paint dots. -->
+  <path d="M16 4 C7 4 3 11 4 18 C5 23 9 26 14 26 C15 26 16 25 16 24 C16 22 14 22 14 20 C14 18 16 17 18 17 L24 17 C27 17 29 15 29 12 C29 7 23 4 16 4 Z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="11" cy="11" r="2.4" fill="#ff3aa8"/>
+  <circle cx="19" cy="9" r="2.4" fill="#ffd027"/>
+  <circle cx="24" cy="13" r="2.4" fill="#3aa8ff"/>
+  <circle cx="10" cy="18" r="2.4" fill="#3ad6a8"/>
+</svg>
