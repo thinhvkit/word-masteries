@@ -17,11 +17,12 @@ Turn-based battle on a 5×5 letter board. The player and an AI enemy alternate; 
 **Setup**
 - Player HP: **200**.
 - Enemies (round order, HP, AI skill):
-  1. Wriggles Jr. — HP 80, skill 0.4
-  2. Spelluga — HP 120, skill 0.6
-  3. Verbosaur — HP 160, skill 0.8
-  4. Lexigon — HP 220, skill 1.0
+  1. Wriggles Jr. — HP 110, skill 0.60
+  2. Spelluga — HP 170, skill 0.78
+  3. Verbosaur — HP 230, skill 0.90
+  4. Lexigon — HP 310, skill 1.00
 - A **topic** is drawn for the battle (food, animals, weather, etc.). Topic words deal bonus damage.
+- AI skill controls how long the enemy's words can be (length cap derived from `lerp(3, max, skill)`) and how often it prefers topic-matching words.
 
 **Forming a word**
 - Tap board tiles in order to build a word (any 8-directional path; same tile cannot appear twice in one chain).
@@ -34,7 +35,7 @@ Turn-based battle on a 5×5 letter board. The player and an AI enemy alternate; 
 - **Rainbow boost**: while armed, the next submitted word deals an additional ×2 damage. Armed via the Rainbow button when you have a charge.
 
 **Rainbow charges**
-- Form 4 consecutive ≥ 5-letter words to earn one Rainbow charge (max 3 stored). Breaking the streak with a < 5-letter word resets the counter.
+- Form **3** consecutive ≥ 5-letter words to earn one Rainbow charge (max **3** stored). Breaking the streak with a < 5-letter word resets the counter.
 
 **XP**
 - Per word: `word_length × 10 + 5 × streak`. Topic-match doubles the result. Mode multiplier applied last.

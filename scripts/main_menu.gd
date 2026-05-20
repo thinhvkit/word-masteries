@@ -261,15 +261,18 @@ func _build_row(g: Dictionary) -> Control:
 	name_lbl.text = g.name
 	name_lbl.add_theme_font_size_override("font_size", 18)
 	name_lbl.add_theme_color_override("font_color", Color.WHITE)
+	name_lbl.clip_text = true                      # never overflow the column
 	col.add_child(name_lbl)
 	var desc := Label.new()
 	desc.text = g.desc
 	desc.add_theme_font_size_override("font_size", 13)
 	desc.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # wrap so it can't push the tag pill off-row
 	col.add_child(desc)
 
-	# Tag pill — vibrant per-game color.
+	# Tag pill — vibrant per-game color. Shrink so the column can't push it off.
 	var tag := _tag_pill(g.tag, color, dark)
+	tag.size_flags_horizontal = Control.SIZE_SHRINK_END
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(tag)
 

@@ -10,8 +10,8 @@ const ROWS := 5
 const COLS := 5
 const MIN_WORD_LEN := 3
 const MIN_VOWELS := 4
-const RAINBOW_STREAK_REQUIRED := 4   # 4× consecutive 5+ letter words → rainbow
-const RAINBOW_MAX := 3
+const RAINBOW_STREAK_REQUIRED := 3   # 3× consecutive 5+ letter words → rainbow
+const RAINBOW_MAX := 3                # max stored rainbow charges
 const DMG_PER_LETTER := 10
 const TOPIC_MULTIPLIER := 2.0
 const STREAK_BONUS := 5               # +5 per consecutive valid word (xp side)
@@ -27,10 +27,10 @@ const VOWELS := "AEIOU"
 
 # --- enemies ---
 const ENEMIES := [
-	{"name": "Wriggles Jr.", "hp": 80,  "skill": 0.4, "avatar": "wriggles_jr"},
-	{"name": "Spelluga",     "hp": 120, "skill": 0.6, "avatar": "spelluga"},
-	{"name": "Verbosaur",    "hp": 160, "skill": 0.8, "avatar": "verbosaur"},
-	{"name": "Lexigon",      "hp": 220, "skill": 1.0, "avatar": "lexigon"},
+	{"name": "Wriggles Jr.", "hp": 110, "skill": 0.6, "avatar": "wriggles_jr"},
+	{"name": "Spelluga",     "hp": 170, "skill": 0.78, "avatar": "spelluga"},
+	{"name": "Verbosaur",    "hp": 230, "skill": 0.9, "avatar": "verbosaur"},
+	{"name": "Lexigon",      "hp": 310, "skill": 1.0, "avatar": "lexigon"},
 ]
 
 func _enemy_avatar_path(idx: int) -> String:
@@ -141,25 +141,32 @@ func _build_ui() -> void:
 	body.add_theme_constant_override("separation", 14)
 	add_child(body)
 
-	# Player HP row — circle avatar (SVG) + thick rounded bar + value.
-	player_hp_bar = _hp_bar(SAGE)
+	# Player HP row — avatar on the LEFT, bar fills to the right (player facing right).
+	player_hp_bar = _hp_bar(SAGE, false)
 	player_hp_label = Label.new()
 	var player_svg := "res://assets/avatars/%s.svg" % GameState.player_avatar
-	var p_row := _hp_row(SAGE, player_svg, player_hp_bar, player_hp_label)
+	var p_row := _hp_row(SAGE, player_svg, player_hp_bar, player_hp_label, false)
 	player_avatar = p_row.get_child(0) as Control
 	body.add_child(p_row)
 	player_hp_label.text = "200"
 
-	# Enemy HP row.
-	enemy_hp_bar = _hp_bar(HP_PINK)
+	# Enemy HP row — MIRRORED: avatar on the RIGHT, bar fills to the left (enemy facing left).
+	enemy_hp_bar = _hp_bar(HP_PINK, true)
 	enemy_hp_label = Label.new()
 	var enemy_svg := _enemy_avatar_path(_enemy_idx)
-	var e_row := _hp_row(HP_PINK, enemy_svg, enemy_hp_bar, enemy_hp_label)
-	enemy_avatar = e_row.get_child(0) as Control
+	var e_row := _hp_row(HP_PINK, enemy_svg, enemy_hp_bar, enemy_hp_label, true)
+	# Avatar is now the LAST child when mirrored.
+	enemy_avatar = e_row.get_child(e_row.get_child_count() - 1) as Control
 	enemy_name_label = Label.new()
-	enemy_name_label.visible = false  # name now shows in the avatar row above; design has no name label
+	enemy_name_label.visible = false
 	add_child(enemy_name_label)
 	body.add_child(e_row)
+	# Kick off idle breathing animations on both avatars.
+	_start_idle_bob(player_avatar)
+	_start_idle_bob(enemy_avatar)
+	# Mirror enemy SVG horizontally so it visually faces the player.
+	_face_avatar_inward(enemy_avatar, true)
+	_face_avatar_inward(player_avatar, false)
 
 	# "Your word: —" pink pill.
 	var word_pill := PanelContainer.new()
@@ -305,7 +312,9 @@ func _build_ui() -> void:
 	body.add_child(status_label)
 
 # ---- HP row helpers ----
-func _hp_bar(fill: Color) -> ProgressBar:
+func _hp_bar(fill: Color, _mirrored: bool = false) -> ProgressBar:
+	# _mirrored is reserved for future right-to-left fill; current implementation
+	# keeps both bars draining LTR — the duel feel comes from avatar mirroring.
 	var bar := ProgressBar.new()
 	bar.min_value = 0
 	bar.max_value = 100
@@ -322,18 +331,22 @@ func _hp_bar(fill: Color) -> ProgressBar:
 	bar.add_theme_stylebox_override("fill", fg)
 	return bar
 
-func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label) -> HBoxContainer:
+func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label, mirrored: bool = false) -> HBoxContainer:
+	# Order: [avatar][bar][value_lbl]   for player (mirrored=false)
+	#        [value_lbl][bar][avatar]   for enemy  (mirrored=true)  → duel feel.
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	var av := Panel.new()
-	av.custom_minimum_size = Vector2(48, 48)
-	av.pivot_offset = Vector2(24, 24)
+	av.custom_minimum_size = Vector2(56, 56)
+	av.pivot_offset = Vector2(28, 28)
 	var av_sb := StyleBoxFlat.new()
 	av_sb.bg_color = circle
-	av_sb.set_corner_radius_all(24)
-	av_sb.shadow_color = Color(0, 0, 0, 0.16)
-	av_sb.shadow_size = 4
-	av_sb.shadow_offset = Vector2i(0, 2)
+	av_sb.set_corner_radius_all(28)
+	av_sb.set_border_width_all(3)
+	av_sb.border_color = Color(1, 1, 1, 0.75)
+	av_sb.shadow_color = Color(circle.r, circle.g, circle.b, 0.55)
+	av_sb.shadow_size = 10
+	av_sb.shadow_offset = Vector2i(0, 3)
 	av.add_theme_stylebox_override("panel", av_sb)
 	if ResourceLoader.exists(svg_path):
 		var icon := TextureRect.new()
@@ -341,22 +354,29 @@ func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-		icon.offset_left = 3
-		icon.offset_top = 3
-		icon.offset_right = -3
-		icon.offset_bottom = -3
+		icon.offset_left = 5
+		icon.offset_top = 5
+		icon.offset_right = -5
+		icon.offset_bottom = -5
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		av.add_child(icon)
-	row.add_child(av)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(bar)
 	value_lbl.text = "0"
 	value_lbl.add_theme_color_override("font_color", Chrome.TEXT)
-	value_lbl.add_theme_font_size_override("font_size", 17)
-	value_lbl.custom_minimum_size = Vector2(36, 0)
+	value_lbl.add_theme_font_size_override("font_size", 18)
+	value_lbl.custom_minimum_size = Vector2(40, 0)
 	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(value_lbl)
+	if mirrored:
+		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.add_child(value_lbl)
+		row.add_child(bar)
+		row.add_child(av)
+	else:
+		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(av)
+		row.add_child(bar)
+		row.add_child(value_lbl)
 	return row
 
 # ---------------- battle setup ----------------
@@ -570,6 +590,7 @@ func _submit_player_word() -> void:
 		var hit_pos := enemy_avatar.global_position + enemy_avatar.size * 0.5 - global_position
 		Fx.damage_popup(self, hit_pos + Vector2(20, -10), dmg, dmg >= 80, Fx.damage_color_for(dmg))
 		Fx.shake(enemy_avatar, 8.0, 0.35)
+		_avatar_lean(enemy_avatar, true)   # enemy leans right (away from player on the left)
 	# Confetti from selected tiles toward enemy avatar.
 	if board_wrap != null and enemy_avatar != null:
 		var froms: Array = []
@@ -656,6 +677,7 @@ func _enemy_turn() -> void:
 		var p_pos := player_avatar.global_position + player_avatar.size * 0.5 - global_position
 		Fx.damage_popup(self, p_pos + Vector2(20, -10), dmg, dmg >= 80, Fx.damage_color_for(dmg))
 		Fx.shake(player_avatar, 8.0, 0.35)
+		_avatar_lean(player_avatar, false)   # player leans left (away from enemy on the right)
 	if dmg >= 80:
 		Fx.shake(self, 4.0, 0.25)
 	# Hold on the hit reaction before the tiles dissolve.
@@ -758,15 +780,18 @@ func _refresh_hud() -> void:
 	player_hp_label.text = "%d" % _player_hp
 	enemy_hp_label.text = "%d" % _enemy_hp
 	player_hp_bar.max_value = PLAYER_MAX_HP
-	player_hp_bar.value = _player_hp
 	enemy_hp_bar.max_value = _enemy_max_hp
-	enemy_hp_bar.value = _enemy_hp
+	_animate_hp_bar(player_hp_bar, _player_hp)
+	_animate_hp_bar(enemy_hp_bar, _enemy_hp)
 	_tint_hp_bar(player_hp_bar, float(_player_hp) / float(PLAYER_MAX_HP))
 	_tint_hp_bar(enemy_hp_bar, float(_enemy_hp) / float(maxi(_enemy_max_hp, 1)))
 	_pulse_hp_if_low(player_hp_bar, float(_player_hp) / float(PLAYER_MAX_HP))
 	rainbow_btn.disabled = _rainbows <= 0 or not _is_player_turn or _busy
 	rainbow_btn.text = "Armed" if _rainbow_pending else "Use (%d)" % _rainbows
 	_refresh_streak_dots()
+	# Active-turn glow on whoever is acting.
+	_set_active_avatar(player_avatar, SAGE_DARK, _is_player_turn and not _busy)
+	_set_active_avatar(enemy_avatar, HP_PINK_DARK, not _is_player_turn and _busy)
 
 func _tint_hp_bar(bar: ProgressBar, ratio: float) -> void:
 	var fill: Color
@@ -907,6 +932,49 @@ func _on_enemy_defeated() -> void:
 	await get_tree().create_timer(0.9).timeout
 	_publish_session(true)
 	get_tree().change_scene_to_file("res://games/word_fight/victory.tscn")
+
+# ---------- duel-style avatar helpers ----------
+
+## Continuous "breathing" scale loop on an avatar so it never feels static.
+func _start_idle_bob(node: Control) -> void:
+	if node == null: return
+	node.pivot_offset = node.size * 0.5
+	var tw := node.create_tween().set_loops()
+	tw.tween_property(node, "scale", Vector2(1.04, 1.04), 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(node, "scale", Vector2(1.0, 1.0), 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+## Horizontally mirror the avatar SVG so the enemy faces the player.
+func _face_avatar_inward(av_panel: Control, mirror: bool) -> void:
+	if av_panel == null: return
+	for c in av_panel.get_children():
+		if c is TextureRect:
+			(c as TextureRect).flip_h = mirror
+
+## Lean an avatar away from the impact, then snap back. Subtler than full shake.
+func _avatar_lean(node: Control, mirror: bool) -> void:
+	if node == null: return
+	var base := node.position
+	var away := Vector2(-12 if not mirror else 12, 0)
+	var tw := node.create_tween()
+	tw.tween_property(node, "position", base + away, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "position", base, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## Highlight whose turn it is by pulsing a colored border + shadow on their avatar.
+func _set_active_avatar(node: Control, accent: Color, on: bool) -> void:
+	if node == null: return
+	var sb := node.get_theme_stylebox("panel") as StyleBoxFlat
+	if sb == null: return
+	var fresh: StyleBoxFlat = sb.duplicate()
+	fresh.border_color = accent if on else Color(1, 1, 1, 0.75)
+	fresh.shadow_color = Color(accent.r, accent.g, accent.b, 0.85 if on else 0.55)
+	fresh.shadow_size = 16 if on else 10
+	node.add_theme_stylebox_override("panel", fresh)
+
+## Smoothly tween an HP bar's value + tint instead of snapping.
+func _animate_hp_bar(bar: ProgressBar, target: int) -> void:
+	if bar == null: return
+	var tw := bar.create_tween()
+	tw.tween_property(bar, "value", float(target), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 # ---------- inner classes: animated board background + chain overlay ----------
 
