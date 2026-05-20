@@ -236,10 +236,35 @@ func _install_web_input() -> void:
 			inp.autocorrect = 'off';
 			inp.spellcheck = false;
 			inp.maxLength = 24;
-			inp.style.cssText = 'position:fixed;padding:0 16px;margin:0;border:none;outline:none;background:transparent;color:#5a4840;font-size:16px;font-family:sans-serif;box-sizing:border-box;z-index:9999;';
+			inp.style.cssText = [
+				'position:fixed','padding:0 16px','margin:0','border:none','outline:none',
+				'background:transparent','color:#5a4840','font-size:16px','font-family:sans-serif',
+				'box-sizing:border-box','z-index:9999','touch-action:auto','pointer-events:auto',
+				'-webkit-user-select:text','user-select:text','-webkit-touch-callout:default',
+				'-webkit-appearance:none','appearance:none'
+			].join(';');
 			document.body.appendChild(inp);
-			inp.addEventListener('input', function(e){ window.__masteries_name = e.target.value; });
-			inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') window.__masteries_submit = true; });
+			// Stop Godot's global key listeners from swallowing our key events.
+			// iOS Safari was showing the keyboard but routing keystrokes to the canvas.
+			var stop = function(e){ e.stopPropagation(); };
+			['keydown','keyup','keypress','input','compositionstart','compositionupdate','compositionend','beforeinput'].forEach(function(t){
+				inp.addEventListener(t, stop, true);
+			});
+			// On focus, blur the canvas so it can't intercept input.
+			inp.addEventListener('focus', function(){
+				var c = document.querySelector('canvas');
+				if (c && c.blur) c.blur();
+			});
+			var pushValue = function(e){ window.__masteries_name = e.target.value; };
+			inp.addEventListener('input', pushValue);
+			inp.addEventListener('compositionend', pushValue);
+			inp.addEventListener('change', pushValue);
+			inp.addEventListener('keydown', function(e){
+				if (e.key === 'Enter') {
+					window.__masteries_submit = true;
+					inp.blur();
+				}
+			});
 			window.__masteries_name = inp.value;
 		})();
 	""" % [_WEB_INPUT_ID, _WEB_INPUT_ID, JSON.stringify(initial)]
