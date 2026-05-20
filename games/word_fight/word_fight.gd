@@ -211,7 +211,7 @@ func _build_ui() -> void:
 	board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# Minimum so the board never collapses below tile size on small screens.
 	board_panel.custom_minimum_size = Vector2(COLS * 56 + (COLS - 1) * 10 + 24, ROWS * 56 + (ROWS - 1) * 10 + 24)
-	board_bg = _AnimatedBoardBG.new()
+	board_bg = Fx.AnimatedBoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	board_panel.add_child(board_bg)
@@ -975,60 +975,6 @@ func _animate_hp_bar(bar: ProgressBar, target: int) -> void:
 	if bar == null: return
 	var tw := bar.create_tween()
 	tw.tween_property(bar, "value", float(target), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-# ---------- inner classes: animated board background + chain overlay ----------
-
-class _AnimatedBoardBG extends Control:
-	var _t: float = 0.0
-	func _ready() -> void:
-		set_process(true)
-	func _process(delta: float) -> void:
-		_t += delta * 0.35
-		queue_redraw()
-	func _draw() -> void:
-		# Animated diagonal gradient cycling through six anchor colors.
-		var palette := [
-			Color("#3aa8ff"), Color("#7a55ff"), Color("#ff3aa8"),
-			Color("#ff7a1f"), Color("#ffd027"), Color("#3ad6a8"),
-		]
-		var bands := 22
-		var w := size.x
-		var h := size.y
-		var radius := 18.0
-		# Background base.
-		_round_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.12, 1), radius)
-		for i in bands:
-			var t0: float = float(i) / float(bands)
-			var t1: float = float(i + 1) / float(bands)
-			var phase: float = fmod(t0 + _t, 1.0) * palette.size()
-			var idx: int = int(phase) % palette.size()
-			var nxt: int = (idx + 1) % palette.size()
-			var f: float = phase - floor(phase)
-			var col: Color = palette[idx].lerp(palette[nxt], f)
-			col.a = 0.55
-			draw_rect(Rect2(Vector2(0, h * t0), Vector2(w, h * (t1 - t0))), col)
-		# Soft inner highlight.
-		_round_rect(Rect2(Vector2(4, 4), size - Vector2(8, 8)), Color(1, 1, 1, 0.05), radius - 4)
-		# Outline.
-		_outline(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.25), radius, 2.0)
-	func _round_rect(rect: Rect2, color: Color, radius: float) -> void:
-		var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-		draw_rect(Rect2(rect.position + Vector2(r, 0), Vector2(rect.size.x - 2*r, rect.size.y)), color)
-		draw_rect(Rect2(rect.position + Vector2(0, r), Vector2(rect.size.x, rect.size.y - 2*r)), color)
-		draw_circle(rect.position + Vector2(r, r), r, color)
-		draw_circle(rect.position + Vector2(rect.size.x - r, r), r, color)
-		draw_circle(rect.position + Vector2(r, rect.size.y - r), r, color)
-		draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, color)
-	func _outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
-		var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-		draw_line(rect.position + Vector2(r, 0), rect.position + Vector2(rect.size.x - r, 0), color, width)
-		draw_line(rect.position + Vector2(r, rect.size.y), rect.position + Vector2(rect.size.x - r, rect.size.y), color, width)
-		draw_line(rect.position + Vector2(0, r), rect.position + Vector2(0, rect.size.y - r), color, width)
-		draw_line(rect.position + Vector2(rect.size.x, r), rect.position + Vector2(rect.size.x, rect.size.y - r), color, width)
-		draw_arc(rect.position + Vector2(r, r), r, PI, PI * 1.5, 16, color, width)
-		draw_arc(rect.position + Vector2(rect.size.x - r, r), r, -PI * 0.5, 0, 16, color, width)
-		draw_arc(rect.position + Vector2(r, rect.size.y - r), r, PI * 0.5, PI, 16, color, width)
-		draw_arc(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, 0, PI * 0.5, 16, color, width)
 
 class _ChainOverlay extends Control:
 	var _tiles_chain: Array = []

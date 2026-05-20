@@ -231,3 +231,75 @@ static func banner(parent: Control, text: String, bg: Color, fg: Color = Color.W
 	tw.chain().tween_interval(0.9)
 	tw.chain().tween_property(b, "modulate:a", 0.0, 0.3)
 	tw.chain().tween_callback(b.queue_free)
+
+# ---------- shared animated vibrant backdrop ----------
+## Reusable backdrop: six-color cycling gradient bands with rounded corners.
+## Each screen instantiates one via `Fx.AnimatedBoardBG.new()` and (optionally)
+## tunes `radius`, `speed`, or `band_alpha` before `add_child`.
+class AnimatedBoardBG extends Control:
+	var radius: float = 18.0
+	var speed: float = 0.3
+	var band_alpha: float = 0.5
+	var bands_count: int = 22
+	var _t: float = 0.0
+	const _PALETTE := [
+		Color("#3aa8ff"), Color("#7a55ff"), Color("#ff3aa8"),
+		Color("#ff7a1f"), Color("#ffd027"), Color("#3ad6a8"),
+	]
+
+	func _ready() -> void:
+		set_process(true)
+		clip_contents = true
+
+	func _process(delta: float) -> void:
+		_t += delta * speed
+		queue_redraw()
+
+	func _draw() -> void:
+		var r: float = minf(radius, minf(size.x, size.y) * 0.5)
+		# Dark base with rounded corners.
+		_round_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.12, 1), r)
+		# Adaptive sub-band count: ~4px per strip means the staircase step at the
+		# corner curve is small enough that the dark gap reads as the corner curve.
+		var step_px: float = 4.0
+		var n: int = maxi(bands_count, int(ceil(size.y / step_px)))
+		for i in n:
+			var t0: float = float(i) / float(n)
+			var t1: float = float(i + 1) / float(n)
+			var phase: float = fmod(t0 + _t, 1.0) * _PALETTE.size()
+			var idx: int = int(phase) % _PALETTE.size()
+			var nxt: int = (idx + 1) % _PALETTE.size()
+			var f: float = phase - floor(phase)
+			var col: Color = _PALETTE[idx].lerp(_PALETTE[nxt], f)
+			col.a = band_alpha
+			var y0: float = size.y * t0
+			var y1: float = size.y * t1
+			# Use the widest (most-inset) chord across the strip so it stays
+			# fully inside the rounded silhouette — no visible disc seams.
+			var chord_top: float = _corner_chord_at_y(y0, r, size.y)
+			var chord_bot: float = _corner_chord_at_y(y1, r, size.y)
+			var chord: float = maxf(chord_top, chord_bot)
+			if chord >= size.x * 0.5:
+				continue
+			draw_rect(Rect2(Vector2(chord, y0), Vector2(size.x - chord * 2, y1 - y0)), col)
+
+	# Horizontal inset (in pixels) imposed by the rounded silhouette at vertical
+	# offset `y` from the top of the bg. Returns 0 outside the corner zones.
+	func _corner_chord_at_y(y: float, r: float, h: float) -> float:
+		var d: float = -1.0
+		if y < r:
+			d = r - y                  # depth into the top corner curve
+		elif y > h - r:
+			d = r - (h - y)            # depth into the bottom corner curve
+		if d < 0.0:
+			return 0.0
+		return r - sqrt(maxf(r * r - d * d, 0.0))
+
+	func _round_rect(rect: Rect2, color: Color, r: float) -> void:
+		var rr: float = minf(r, minf(rect.size.x, rect.size.y) * 0.5)
+		draw_rect(Rect2(rect.position + Vector2(rr, 0), Vector2(rect.size.x - 2 * rr, rect.size.y)), color)
+		draw_rect(Rect2(rect.position + Vector2(0, rr), Vector2(rect.size.x, rect.size.y - 2 * rr)), color)
+		draw_circle(rect.position + Vector2(rr, rr), rr, color)
+		draw_circle(rect.position + Vector2(rect.size.x - rr, rr), rr, color)
+		draw_circle(rect.position + Vector2(rr, rect.size.y - rr), rr, color)
+		draw_circle(rect.position + Vector2(rect.size.x - rr, rect.size.y - rr), rr, color)

@@ -41,7 +41,7 @@ const DARK_CARD_BORDER := Color("#3a2a78")
 
 func _ready() -> void:
 	# Animated vibrant backdrop matching the in-game palette.
-	var bg := _AnimatedBoardBG.new()
+	var bg := Fx.AnimatedBoardBG.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
@@ -347,35 +347,3 @@ func _open(scene_path: String) -> void:
 		push_warning("Scene missing: " + scene_path)
 		return
 	get_tree().change_scene_to_file(scene_path)
-
-# ---------------- animated vibrant backdrop ----------------
-class _AnimatedBoardBG extends Control:
-	var _t: float = 0.0
-	func _ready() -> void:
-		set_process(true)
-		clip_contents = true
-	func _process(delta: float) -> void:
-		_t += delta * 0.25
-		queue_redraw()
-	func _draw() -> void:
-		var palette := [
-			Color("#3aa8ff"), Color("#7a55ff"), Color("#ff3aa8"),
-			Color("#ff7a1f"), Color("#ffd027"), Color("#3ad6a8"),
-		]
-		# Dark base for contrast against the white text & vibrant cards.
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.12, 1))
-		var bands := 22
-		var w := size.x
-		var h := size.y
-		for i in bands:
-			var t0: float = float(i) / float(bands)
-			var t1: float = float(i + 1) / float(bands)
-			var phase: float = fmod(t0 + _t, 1.0) * palette.size()
-			var idx: int = int(phase) % palette.size()
-			var nxt: int = (idx + 1) % palette.size()
-			var f: float = phase - floor(phase)
-			var col: Color = palette[idx].lerp(palette[nxt], f)
-			col.a = 0.45
-			draw_rect(Rect2(Vector2(0, h * t0), Vector2(w, h * (t1 - t0))), col)
-		# Subtle vignette so the corners read darker.
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.01, 0.08, 0.0))

@@ -7,5 +7,9 @@
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#bg)"/>
   <circle cx="102" cy="26" r="10" fill="#ffc844"/>
-  <text x="64" y="92" font-family="Arial Black, sans-serif" font-size="76" font-weight="900" text-anchor="middle" fill="#ffffff">M</text>
+  <!-- Path-traced "M". SVG <text> was invisible in Godot's SVG rasterizer
+       because no system font ships with it; strokes/fills only. -->
+  <path d="M 36 96 L 36 32 L 64 66 L 92 32 L 92 96"
+        stroke="#ffffff" stroke-width="14"
+        fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
