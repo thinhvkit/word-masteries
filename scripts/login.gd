@@ -151,13 +151,26 @@ func _style_name_field() -> void:
 	_name_sb.content_margin_top = 0
 	_name_sb.content_margin_bottom = 0
 	name_field.add_theme_stylebox_override("panel", _name_sb)
+	# Mobile web (iOS Safari / Android Chrome) needs the wrapper to pass clicks
+	# through to the LineEdit and the LineEdit to fully fill its row, otherwise
+	# taps on padding don't focus the input and the virtual keyboard never opens.
+	name_field.mouse_filter = Control.MOUSE_FILTER_PASS
 	name_edit.placeholder_text = "Your display name"
 	name_edit.add_theme_font_size_override("font_size", 16)
 	name_edit.add_theme_color_override("font_color", TEXT)
 	name_edit.add_theme_color_override("font_placeholder_color", TEXT_SEC)
+	name_edit.focus_mode = Control.FOCUS_ALL
+	name_edit.mouse_filter = Control.MOUSE_FILTER_STOP
+	name_edit.virtual_keyboard_enabled = true
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var transparent := StyleBoxEmpty.new()
 	name_edit.add_theme_stylebox_override("normal", transparent)
 	name_edit.add_theme_stylebox_override("focus", transparent)
+	# Tap on the field padding → focus the LineEdit (forces virtual keyboard).
+	name_field.gui_input.connect(func(event: InputEvent):
+		if (event is InputEventMouseButton and event.pressed) or (event is InputEventScreenTouch and event.pressed):
+			name_edit.grab_focus())
 	name_edit.add_theme_stylebox_override("read_only", transparent)
 
 func _refresh_name() -> void:
