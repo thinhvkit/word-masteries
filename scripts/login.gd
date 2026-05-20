@@ -146,14 +146,14 @@ func _style_name_field() -> void:
 	_name_sb.border_width_top = 2
 	_name_sb.border_width_bottom = 2
 	_name_sb.border_color = BORDER
-	_name_sb.content_margin_left = 16
-	_name_sb.content_margin_right = 16
+	# IMPORTANT: zero padding on the wrapper so the LineEdit fills the entire
+	# tappable area. iOS Safari only opens the virtual keyboard when the touch
+	# lands directly on the LineEdit (its hidden HTML <input>), not on padding.
+	_name_sb.content_margin_left = 0
+	_name_sb.content_margin_right = 0
 	_name_sb.content_margin_top = 0
 	_name_sb.content_margin_bottom = 0
 	name_field.add_theme_stylebox_override("panel", _name_sb)
-	# Mobile web (iOS Safari / Android Chrome) needs the wrapper to pass clicks
-	# through to the LineEdit and the LineEdit to fully fill its row, otherwise
-	# taps on padding don't focus the input and the virtual keyboard never opens.
 	name_field.mouse_filter = Control.MOUSE_FILTER_PASS
 	name_edit.placeholder_text = "Your display name"
 	name_edit.add_theme_font_size_override("font_size", 16)
@@ -164,14 +164,19 @@ func _style_name_field() -> void:
 	name_edit.virtual_keyboard_enabled = true
 	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var transparent := StyleBoxEmpty.new()
-	name_edit.add_theme_stylebox_override("normal", transparent)
-	name_edit.add_theme_stylebox_override("focus", transparent)
-	# Tap on the field padding → focus the LineEdit (forces virtual keyboard).
-	name_field.gui_input.connect(func(event: InputEvent):
-		if (event is InputEventMouseButton and event.pressed) or (event is InputEventScreenTouch and event.pressed):
-			name_edit.grab_focus())
-	name_edit.add_theme_stylebox_override("read_only", transparent)
+	# Use transparent StyleBoxFlat (NOT StyleBoxEmpty) with explicit content margins.
+	# StyleBoxEmpty has no defined text region, which on Android Chrome / iOS Safari
+	# causes typed characters from the virtual keyboard to render offscreen.
+	var le_box := StyleBoxFlat.new()
+	le_box.bg_color = Color(0, 0, 0, 0)
+	# LineEdit owns its own visual padding now that the wrapper has none.
+	le_box.content_margin_left = 16
+	le_box.content_margin_right = 16
+	le_box.content_margin_top = 14
+	le_box.content_margin_bottom = 14
+	name_edit.add_theme_stylebox_override("normal", le_box)
+	name_edit.add_theme_stylebox_override("focus", le_box)
+	name_edit.add_theme_stylebox_override("read_only", le_box)
 
 func _refresh_name() -> void:
 	var has := not name_edit.text.strip_edges().is_empty()
