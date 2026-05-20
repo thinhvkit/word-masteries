@@ -244,7 +244,7 @@ func _install_web_input() -> void:
 			inp.spellcheck = false;
 			inp.maxLength = 24;
 			inp.style.cssText = [
-				'position:fixed','padding:0 16px','margin:0','border:none','outline:none',
+				'position:absolute','padding:0 16px','margin:0','border:none','outline:none',
 				'background:transparent','color:#5a4840','font-size:16px','font-family:sans-serif',
 				'box-sizing:border-box','z-index:9999','touch-action:auto','pointer-events:auto',
 				'-webkit-user-select:text','user-select:text','-webkit-touch-callout:default',
@@ -291,6 +291,10 @@ func _process(_delta: float) -> void:
 	# Reposition the HTML input over the name field every frame.
 	var rect: Rect2 = name_field.get_global_rect()
 	var vp: Vector2 = get_viewport().get_visible_rect().size
+	# Position absolute (document-relative) instead of fixed, because iOS Safari's
+	# visual viewport shifts on keyboard show and yanks fixed elements to the top.
+	# Adding scrollX/Y converts the canvas's viewport-relative rect into document
+	# coordinates so the overlay stays glued to the actual name_field.
 	var js_pos := """
 		(function(){
 			var inp = document.getElementById('%s');
@@ -300,8 +304,10 @@ func _process(_delta: float) -> void:
 			var cr = canvas.getBoundingClientRect();
 			var sx = cr.width / %f;
 			var sy = cr.height / %f;
-			inp.style.left = (cr.left + %f * sx) + 'px';
-			inp.style.top = (cr.top + %f * sy) + 'px';
+			var pageX = cr.left + (window.scrollX || window.pageXOffset || 0);
+			var pageY = cr.top  + (window.scrollY || window.pageYOffset || 0);
+			inp.style.left = (pageX + %f * sx) + 'px';
+			inp.style.top = (pageY + %f * sy) + 'px';
 			inp.style.width = (%f * sx) + 'px';
 			inp.style.height = (%f * sy) + 'px';
 		})();
