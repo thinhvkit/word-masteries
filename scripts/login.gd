@@ -30,6 +30,12 @@ var _avatar_idx: int = 0
 var _name_sb: StyleBoxFlat
 var _avatar_btns: Array[Control] = []
 
+# Web fallback: Godot 4.x has known mobile-LineEdit bugs (iOS keyboard never
+# opens; Android typing doesn't propagate). On web we overlay a real HTML
+# <input> element over the name field and sync its value into name_edit.
+const _WEB_INPUT_ID := "masteries_name_input"
+var _web_input_active := false
+
 func _ready() -> void:
 	_build_mascot()
 	_style_title()
@@ -46,6 +52,9 @@ func _ready() -> void:
 	name_edit.text_changed.connect(func(_t): _refresh_name())
 	name_edit.text_submitted.connect(func(_t): _try_continue())
 	continue_btn.pressed.connect(_try_continue)
+	# On web, install the HTML <input> overlay (skipped on native).
+	if OS.has_feature("web"):
+		call_deferred("_install_web_input")
 
 func _build_mascot() -> void:
 	var MascotScript := preload("res://scripts/wriggles.gd")
@@ -195,6 +204,8 @@ func _style_continue() -> void:
 	continue_btn.disabled = true
 
 func _try_continue() -> void:
+	if _web_input_active:
+		_pull_web_input_value()
 	var n := name_edit.text.strip_edges()
 	if n.is_empty():
 		return
@@ -202,6 +213,97 @@ func _try_continue() -> void:
 	GameState.player_avatar = AVATARS[_avatar_idx]
 	GameState.save()
 	get_tree().change_scene_to_file("res://scenes/mode_select.tscn")
+
+# ---------------- Web HTML <input> overlay ----------------
+
+func _install_web_input() -> void:
+	if not Engine.has_singleton("JavaScriptBridge"):
+		return
+	# Create the overlay element once. Style approximates the Godot field so
+	# it looks natural over the cream background.
+	var initial: String = name_edit.text
+	var js_create := """
+		(function(){
+			var old = document.getElementById('%s');
+			if (old) old.remove();
+			var inp = document.createElement('input');
+			inp.id = '%s';
+			inp.type = 'text';
+			inp.value = %s;
+			inp.placeholder = 'Your display name';
+			inp.autocomplete = 'off';
+			inp.autocapitalize = 'words';
+			inp.autocorrect = 'off';
+			inp.spellcheck = false;
+			inp.maxLength = 24;
+			inp.style.cssText = 'position:fixed;padding:0 16px;margin:0;border:none;outline:none;background:transparent;color:#5a4840;font-size:16px;font-family:sans-serif;box-sizing:border-box;z-index:9999;';
+			document.body.appendChild(inp);
+			inp.addEventListener('input', function(e){ window.__masteries_name = e.target.value; });
+			inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') window.__masteries_submit = true; });
+			window.__masteries_name = inp.value;
+		})();
+	""" % [_WEB_INPUT_ID, _WEB_INPUT_ID, JSON.stringify(initial)]
+	_js_eval(js_create, true)
+	_web_input_active = true
+	# Hide the Godot LineEdit's text + caret so it doesn't double-render under the HTML input.
+	name_edit.add_theme_color_override("font_color", Color(0, 0, 0, 0))
+	name_edit.add_theme_color_override("font_placeholder_color", Color(0, 0, 0, 0))
+	name_edit.caret_blink = false
+	set_process(true)
+
+func _process(_delta: float) -> void:
+	if not _web_input_active:
+		return
+	if not Engine.has_singleton("JavaScriptBridge"):
+		return
+	# Reposition the HTML input over the name field every frame.
+	var rect: Rect2 = name_field.get_global_rect()
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var js_pos := """
+		(function(){
+			var inp = document.getElementById('%s');
+			if (!inp) return;
+			var canvas = document.querySelector('canvas');
+			if (!canvas) return;
+			var cr = canvas.getBoundingClientRect();
+			var sx = cr.width / %f;
+			var sy = cr.height / %f;
+			inp.style.left = (cr.left + %f * sx) + 'px';
+			inp.style.top = (cr.top + %f * sy) + 'px';
+			inp.style.width = (%f * sx) + 'px';
+			inp.style.height = (%f * sy) + 'px';
+		})();
+	""" % [_WEB_INPUT_ID, vp.x, vp.y, rect.position.x, rect.position.y, rect.size.x, rect.size.y]
+	_js_eval(js_pos, true)
+	# Pump current value back into Godot so _refresh_name + Continue button work.
+	_pull_web_input_value()
+	var submit_pressed: Variant = _js_eval("window.__masteries_submit || false", true)
+	if bool(submit_pressed):
+		_js_eval("window.__masteries_submit = false", true)
+		_try_continue()
+
+func _pull_web_input_value() -> void:
+	if not Engine.has_singleton("JavaScriptBridge"):
+		return
+	var v: Variant = _js_eval("window.__masteries_name || ''", true)
+	if v == null:
+		return
+	var s := str(v)
+	if s != name_edit.text:
+		name_edit.text = s
+		_refresh_name()
+
+func _exit_tree() -> void:
+	if _web_input_active and Engine.has_singleton("JavaScriptBridge"):
+		_js_eval("var x=document.getElementById('%s'); if(x) x.remove();" % _WEB_INPUT_ID, true)
+
+func _js_eval(src: String, use_global_ctx: bool = true) -> Variant:
+	# Routed through Engine.get_singleton so this script still parses on
+	# non-web platforms where the JavaScriptBridge global doesn't exist.
+	if not Engine.has_singleton("JavaScriptBridge"):
+		return null
+	var js: Object = Engine.get_singleton("JavaScriptBridge")
+	return js.call("eval", src, use_global_ctx)
 
 class _Dot extends Control:
 	var color: Color = Color.WHITE :
