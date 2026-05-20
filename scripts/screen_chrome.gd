@@ -95,7 +95,7 @@ static func chip(text: String, bg: Color, fg: Color) -> PanelContainer:
 	p.add_child(lbl)
 	return p
 
-static func pill_button(text: String, fill: Color, fg: Color = Color.WHITE) -> Button:
+static func pill_button(text: String, fill: Color, fg: Color = Color.WHITE, icon_path: String = "", icon_alignment: int = HORIZONTAL_ALIGNMENT_RIGHT) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
@@ -104,6 +104,13 @@ static func pill_button(text: String, fill: Color, fg: Color = Color.WHITE) -> B
 	b.add_theme_font_size_override("font_size", 17)
 	b.add_theme_color_override("font_color", fg)
 	b.add_theme_color_override("font_hover_color", fg)
+	# Optional inline icon (e.g. arrow_right on a "Next" pill, play on a play button).
+	if icon_path != "" and ResourceLoader.exists(icon_path):
+		b.icon = load(icon_path)
+		b.icon_alignment = icon_alignment
+		b.expand_icon = false
+		b.add_theme_constant_override("icon_max_width", 22)
+		b.add_theme_constant_override("h_separation", 8)
 	b.add_theme_color_override("font_pressed_color", fg)
 	b.add_theme_color_override("font_disabled_color", Color(fg.r, fg.g, fg.b, 0.6))
 	var sb := StyleBoxFlat.new()

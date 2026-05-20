@@ -461,7 +461,13 @@ func _end_drag() -> void:
 func _try_add_letter_at(gpos: Vector2) -> void:
 	for n in _letters:
 		if n.contains_point(gpos):
-			# Allow same-tile reuse, but not back-to-back duplicate of last.
+			# Drag back onto the previous letter → pop the most-recent off
+			# the chain (revert). Touching the current head is a no-op.
+			if _chain.size() >= 2 and _chain[-2] == n:
+				var popped: WMLetter = _chain.pop_back()
+				if popped != null and not _chain.has(popped):
+					popped.selected = false
+				return
 			if _chain.size() > 0 and _chain[-1] == n:
 				return
 			_chain.append(n)

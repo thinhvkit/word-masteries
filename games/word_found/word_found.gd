@@ -139,7 +139,7 @@ func _apply_design() -> void:
 	row2_label.add_theme_font_size_override("font_size", 28)
 	var row2_node: Control = $V/Row2
 	var caption := Label.new()
-	caption.text = "Your word ↓ (tap to undo)"
+	caption.text = "Your word (tap a letter to undo)"
 	caption.add_theme_font_size_override("font_size", 14)
 	caption.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	v.add_child(caption)
@@ -164,7 +164,7 @@ func _apply_design() -> void:
 
 	# Row1 — animated vibrant backdrop behind the grid.
 	var row1_lbl: Label = $V/Row1Label
-	row1_lbl.text = "Available letters ↓ tap to use"
+	row1_lbl.text = "Available letters — tap to use"
 	row1_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	row1_lbl.add_theme_font_size_override("font_size", 14)
 	_wrap_row1_with_bg(row1_grid, v)

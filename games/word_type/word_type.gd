@@ -355,7 +355,7 @@ func _build_results(typed_set: Dictionary, correct: int, earned: int) -> void:
 	sub.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
 	col.add_child(sub)
 	var stat := Label.new()
-	stat.text = "%d / %d forms  •  +%d XP" % [correct, _data.forms.size(), earned]
+	stat.text = "%d / %d forms  |  +%d XP" % [correct, _data.forms.size(), earned]
 	stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stat.add_theme_font_size_override("font_size", 22)
 	stat.add_theme_color_override("font_color", VIBRANT_GOLD)
@@ -391,7 +391,7 @@ func _build_results(typed_set: Dictionary, correct: int, earned: int) -> void:
 		box.add_child(_form_row(_data.forms[i], _data.types[i], _data.examples[i], typed_set.has(_data.forms[i])))
 	_body.add_child(card)
 
-	var next := Chrome.pill_button("Next Word →", VIBRANT_MAGENTA, Color.WHITE)
+	var next := Chrome.pill_button("Next Word", VIBRANT_MAGENTA, Color.WHITE, "res://assets/icons/arrow_right.svg")
 	next.pressed.connect(func():
 		_data = DATA[randi() % DATA.size()]
 		_build_form())

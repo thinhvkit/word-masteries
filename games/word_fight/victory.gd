@@ -52,8 +52,14 @@ func _build_ui(s: Dictionary) -> void:
 	# Buttons
 	var cur_idx: int = int(s.get("enemy_idx", 0))
 	var is_last: bool = (cur_idx + 1) >= ENEMY_COUNT
-	var next_label: String = "Back to Map" if is_last else "Next Battle →"
+	var next_label: String = "Back to Map" if is_last else "Next Battle"
 	var next_btn := UI.primary_btn(next_label)
+	if not is_last and ResourceLoader.exists("res://assets/icons/arrow_right.svg"):
+		next_btn.icon = load("res://assets/icons/arrow_right.svg")
+		next_btn.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		next_btn.expand_icon = false
+		next_btn.add_theme_constant_override("icon_max_width", 22)
+		next_btn.add_theme_constant_override("h_separation", 8)
 	next_btn.pressed.connect(_on_next.bind(is_last))
 	body.add_child(next_btn)
 

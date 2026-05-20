@@ -105,8 +105,8 @@ func _insert_avatar_chip() -> void:
 	sb.set_corner_radius_all(24)
 	sb.set_border_width_all(2)
 	sb.border_color = VIBRANT_MAGENTA
-	sb.shadow_color = Color(VIBRANT_MAGENTA.r, VIBRANT_MAGENTA.g, VIBRANT_MAGENTA.b, 0.5)
-	sb.shadow_size = 6
+	sb.shadow_color = Color(VIBRANT_MAGENTA.r, VIBRANT_MAGENTA.g, VIBRANT_MAGENTA.b, 0.28)
+	sb.shadow_size = 4
 	sb.shadow_offset = Vector2i(0, 2)
 	bg_panel.add_theme_stylebox_override("panel", sb)
 	holder.add_child(bg_panel)
@@ -225,8 +225,8 @@ func _build_row(g: Dictionary) -> Control:
 	sb.shadow_offset = Vector2i(0, 3)
 	var sb_hover := sb.duplicate() as StyleBoxFlat
 	sb_hover.border_color = color
-	sb_hover.shadow_color = Color(color.r, color.g, color.b, 0.5)
-	sb_hover.shadow_size = 12
+	sb_hover.shadow_color = Color(color.r, color.g, color.b, 0.28)
+	sb_hover.shadow_size = 6
 	var sb_press := sb.duplicate() as StyleBoxFlat
 	sb_press.shadow_size = 2
 	sb_press.shadow_offset = Vector2i(0, 1)
@@ -301,9 +301,9 @@ func _icon_block(game_id: String, color: Color, dark: Color) -> Control:
 	sb.bg_color = color
 	sb.set_corner_radius_all(17)
 	sb.set_border_width_all(2)
-	sb.border_color = Color(1, 1, 1, 0.35)
-	sb.shadow_color = Color(color.r, color.g, color.b, 0.5)
-	sb.shadow_size = 8
+	sb.border_color = Color(1, 1, 1, 0.22)
+	sb.shadow_color = Color(0, 0, 0, 0.25)   # plain dark drop shadow, no colored halo
+	sb.shadow_size = 4
 	top.add_theme_stylebox_override("panel", sb)
 	holder.add_child(top)
 	# White glyph icon (SVG).

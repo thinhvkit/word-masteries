@@ -14,7 +14,7 @@ config/name="Masteries"
 config/description="A colorful word game app for adults learning English."
 run/main_scene="res://scenes/welcome.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
-config/icon="res://icon.svg"
+config/icon="res://assets/ios/icon_1024.png"
 
 [autoload]
 

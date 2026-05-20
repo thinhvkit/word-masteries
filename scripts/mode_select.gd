@@ -19,7 +19,7 @@ const INTERMEDIATE := {
 	"title": "Intermediate",
 	"sub": "For learners building confidence",
 	"bullets": [
-		"3–4 letter word targets",
+		"3-4 letter word targets",
 		"Shorter, simpler prompts",
 		"Beginner-friendly vocabulary",
 	],
@@ -30,7 +30,7 @@ const ADVANCED := {
 	"title": "Advanced",
 	"sub": "For confident English users",
 	"bullets": [
-		"5–6 letter word targets",
+		"5-6 letter word targets",
 		"Complex grammar & forms",
 		"Harder vocabulary + scoring",
 	],

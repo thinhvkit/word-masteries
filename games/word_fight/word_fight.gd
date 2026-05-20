@@ -703,7 +703,7 @@ func _end_enemy_turn() -> void:
 	_busy = false
 	_is_player_turn = true
 	_dim_board(false)
-	_set_status(status_label.text + "  ·  Your turn.")
+	_set_status(status_label.text + "  |  Your turn.")
 	_refresh_hud()
 
 func _enemy_pick_word_async(skill: float) -> Dictionary:

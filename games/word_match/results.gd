@@ -10,9 +10,15 @@ func _build_ui(s: Dictionary) -> void:
 	UI.bg_layer(self, Palette.BG)
 
 	var back_btn := Button.new()
-	back_btn.text = "← Back"
+	back_btn.text = "Back"
+	if ResourceLoader.exists("res://assets/icons/arrow_left.svg"):
+		back_btn.icon = load("res://assets/icons/arrow_left.svg")
+		back_btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		back_btn.expand_icon = false
+		back_btn.add_theme_constant_override("icon_max_width", 20)
+		back_btn.add_theme_constant_override("h_separation", 6)
 	back_btn.position = Vector2(12, 12)
-	back_btn.size = Vector2(80, 32)
+	back_btn.size = Vector2(96, 32)
 	back_btn.pressed.connect(_on_back)
 	add_child(back_btn)
 
