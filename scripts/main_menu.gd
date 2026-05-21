@@ -3,7 +3,7 @@ extends Control
 const Fx := preload("res://games/word_fight/fx.gd")
 
 const GAMES := [
-	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 5×5 board","tag":"Battle","scene":"res://games/word_fight/intro.tscn"},
+	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 5×5 board","tag":"Battle","scene":"res://games/word_fight/world_map.tscn"},
 	{"id":"word_match","name":"Word Match","desc":"Drag across circle letters — 2 minutes","tag":"Drag","scene":"res://games/word_match/word_match.tscn"},
 	{"id":"word_found","name":"Word Found","desc":"Tap letters into rows, wave by wave","tag":"Waves","scene":"res://games/word_found/word_found.tscn"},
 	{"id":"story_tell","name":"Story Tell","desc":"Fill blanks — AI scores your grammar","tag":"AI","scene":"res://games/story_tell/story_tell.tscn"},
@@ -41,7 +41,7 @@ const DARK_CARD_BORDER := Color("#3a2a78")
 
 func _ready() -> void:
 	# Animated vibrant backdrop matching the in-game palette.
-	var bg := Fx.AnimatedBoardBG.new()
+	var bg := Fx.BoardBG.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)

@@ -157,6 +157,7 @@ func _build_ui() -> void:
 	preview_label = Label.new()
 	preview_label.text = "—"
 	preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	preview_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	preview_label.add_theme_color_override("font_color", Color.WHITE)
 	preview_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
 	preview_label.add_theme_constant_override("outline_size", 4)
@@ -171,7 +172,8 @@ func _build_ui() -> void:
 	const BOARD_AREA_TOP := 340   # below the HUD + found card + current-word pill
 	const BOARD_AREA_BOTTOM := -48  # above the footer hint
 	const BOARD_AREA_INSET := 8
-	board_bg = _AnimatedBoardBG.new()
+	board_bg = Fx.BoardBG.new()
+	board_bg.radius = 28.0
 	board_bg.anchor_left = 0.0
 	board_bg.anchor_right = 1.0
 	board_bg.anchor_top = 0.0
@@ -494,7 +496,7 @@ func _current_word() -> String:
 
 func _update_preview() -> void:
 	var w := _current_word()
-	preview_label.text = w if not w.is_empty() else "—"
+	Fx.fit_label_font(preview_label, w if not w.is_empty() else "—", 28, maxf(get_viewport_rect().size.x - 48.0, 120.0))
 
 # -------- scoring --------
 
@@ -568,60 +570,3 @@ func _end_round() -> void:
 	# Brief pause so the player sees the "Time!" message before transitioning.
 	await get_tree().create_timer(0.8).timeout
 	get_tree().change_scene_to_file("res://games/word_match/results.tscn")
-
-# ---------------- inner class: animated vibrant backdrop ----------------
-class _AnimatedBoardBG extends Control:
-	var _t: float = 0.0
-	func _ready() -> void:
-		set_process(true)
-		clip_contents = true
-	func _process(delta: float) -> void:
-		_t += delta * 0.4
-		queue_redraw()
-	func _draw() -> void:
-		var palette := [
-			Color("#3aa8ff"), Color("#7a55ff"), Color("#ff3aa8"),
-			Color("#ff7a1f"), Color("#ffd027"), Color("#3ad6a8"),
-		]
-		var radius := 28.0
-		# Base.
-		_round_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.12, 1), radius)
-		# Animated radial bands.
-		var center := size * 0.5
-		var max_r: float = center.length()
-		var rings := 18
-		for i in rings:
-			var t0: float = float(i) / float(rings)
-			var t1: float = float(i + 1) / float(rings)
-			var phase: float = fmod(t0 + _t, 1.0) * palette.size()
-			var idx: int = int(phase) % palette.size()
-			var nxt: int = (idx + 1) % palette.size()
-			var f: float = phase - floor(phase)
-			var col: Color = palette[idx].lerp(palette[nxt], f)
-			col.a = 0.42
-			# Annular band: draw outer circle at r1, then inner punch via inverted overdraw isn't ideal —
-			# instead draw thin filled arc bands using draw_circle with shrinking radii in alpha order.
-			var r1: float = lerpf(max_r * 1.1, 0.0, t1)
-			draw_circle(center, r1, col)
-		# Soft inner overlay to dim the very center for letter contrast.
-		draw_circle(center, max_r * 0.42, Color(0.08, 0.05, 0.18, 0.55))
-		# Outline.
-		_outline(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.25), radius, 2.0)
-	func _round_rect(rect: Rect2, color: Color, radius: float) -> void:
-		var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-		draw_rect(Rect2(rect.position + Vector2(r, 0), Vector2(rect.size.x - 2*r, rect.size.y)), color)
-		draw_rect(Rect2(rect.position + Vector2(0, r), Vector2(rect.size.x, rect.size.y - 2*r)), color)
-		draw_circle(rect.position + Vector2(r, r), r, color)
-		draw_circle(rect.position + Vector2(rect.size.x - r, r), r, color)
-		draw_circle(rect.position + Vector2(r, rect.size.y - r), r, color)
-		draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, color)
-	func _outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
-		var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-		draw_line(rect.position + Vector2(r, 0), rect.position + Vector2(rect.size.x - r, 0), color, width)
-		draw_line(rect.position + Vector2(r, rect.size.y), rect.position + Vector2(rect.size.x - r, rect.size.y), color, width)
-		draw_line(rect.position + Vector2(0, r), rect.position + Vector2(0, rect.size.y - r), color, width)
-		draw_line(rect.position + Vector2(rect.size.x, r), rect.position + Vector2(rect.size.x, rect.size.y - r), color, width)
-		draw_arc(rect.position + Vector2(r, r), r, PI, PI * 1.5, 16, color, width)
-		draw_arc(rect.position + Vector2(rect.size.x - r, r), r, -PI * 0.5, 0, 16, color, width)
-		draw_arc(rect.position + Vector2(r, rect.size.y - r), r, PI * 0.5, PI, 16, color, width)
-		draw_arc(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, 0, PI * 0.5, 16, color, width)

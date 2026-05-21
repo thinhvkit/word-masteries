@@ -1,9 +1,9 @@
 extends Control
 ## Word Fight — Pre-Battle intro. Shows round, you-vs-enemy, topic.
 
-const Topics := preload("res://games/word_fight/topics.gd")
 const Chrome := preload("res://scripts/screen_chrome.gd")
 const Fx := preload("res://games/word_fight/fx.gd")
+const Worlds := preload("res://games/word_fight/worlds.gd")
 
 const VIBRANT_GOLD := Color("#ffd027")
 const VIBRANT_GOLD_DARK := Color("#7a4a00")
@@ -13,14 +13,6 @@ const VIBRANT_BLUE := Color("#3aa8ff")
 const DARK_CARD := Color("#1a1240")
 const DARK_CARD_BORDER := Color("#3a2a78")
 
-# Enemy roster mirrors word_fight.gd. Kept here so intro can render
-# before instantiating the gameplay scene.
-const ENEMIES := [
-	{"name": "Wriggles Jr.", "hp": 80,  "avatar": "wriggles_jr"},
-	{"name": "Spelluga",     "hp": 120, "avatar": "spelluga"},
-	{"name": "Verbosaur",    "hp": 160, "avatar": "verbosaur"},
-	{"name": "Lexigon",      "hp": 220, "avatar": "lexigon"},
-]
 const SAGE := Color("#a7d99a")
 const PINK := Color("#e07a8c")
 const PINK_DARK := Color("#c95e74")
@@ -38,19 +30,21 @@ func _ready() -> void:
 	GameState.wf_session["rainbows_used"] = 0
 	GameState.wf_session["score_earned"] = 0
 
-	var idx: int = int(GameState.wf_session.get("enemy_idx", 0)) % ENEMIES.size()
-	var enemy: Dictionary = ENEMIES[idx]
-	var topic: String = Topics.random_topic()
+	var world_idx: int = int(GameState.wf_session.get("world_idx", 0))
+	var idx: int = int(GameState.wf_session.get("enemy_idx", 0))
+	var enemy: Dictionary = Worlds.enemy(world_idx, idx)
+	var topic: String = Worlds.random_topic(world_idx)
+	GameState.wf_session["world_idx"] = world_idx
 	GameState.wf_session["enemy_idx"] = idx
 	GameState.wf_session["enemy_name"] = enemy.name
 	GameState.wf_session["enemy_max_hp"] = int(enemy.hp)
 	GameState.wf_session["topic"] = topic
 
-	_build_ui(idx + 1, enemy, topic)
+	_build_ui(world_idx, idx, enemy, topic)
 
-func _build_ui(round_num: int, enemy: Dictionary, topic: String) -> void:
+func _build_ui(world_idx: int, enemy_idx: int, enemy: Dictionary, topic: String) -> void:
 	# Animated gradient backdrop (matches the in-game board).
-	var bg := Fx.AnimatedBoardBG.new()
+	var bg := Fx.BoardBG.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
@@ -70,14 +64,22 @@ func _build_ui(round_num: int, enemy: Dictionary, topic: String) -> void:
 	body.add_theme_constant_override("separation", 18)
 	add_child(body)
 
-	var round_lbl := Label.new()
-	round_lbl.text = "ROUND %d" % round_num
-	round_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	round_lbl.add_theme_font_size_override("font_size", 36)
-	round_lbl.add_theme_color_override("font_color", VIBRANT_GOLD)
-	round_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
-	round_lbl.add_theme_constant_override("outline_size", 6)
-	body.add_child(round_lbl)
+	var world_lbl := Label.new()
+	world_lbl.text = Worlds.world(world_idx).name
+	world_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	world_lbl.add_theme_font_size_override("font_size", 30)
+	world_lbl.add_theme_color_override("font_color", VIBRANT_GOLD)
+	world_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+	world_lbl.add_theme_constant_override("outline_size", 6)
+	body.add_child(world_lbl)
+	var battle_lbl := Label.new()
+	battle_lbl.text = "Battle %d of %d" % [enemy_idx + 1, Worlds.ENEMIES_PER_WORLD]
+	battle_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	battle_lbl.add_theme_font_size_override("font_size", 16)
+	battle_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
+	battle_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+	battle_lbl.add_theme_constant_override("outline_size", 3)
+	body.add_child(battle_lbl)
 
 	# VS row.
 	var vs := HBoxContainer.new()
@@ -94,6 +96,8 @@ func _build_ui(round_num: int, enemy: Dictionary, topic: String) -> void:
 	vs.add_child(vs_lbl)
 	vs.add_child(_avatar(enemy.name, "res://assets/avatars/%s.svg" % str(enemy.avatar), PINK))
 	body.add_child(vs)
+
+	body.add_child(_abilities_card(enemy.get("abilities", [])))
 
 	body.add_child(_topic_card(topic))
 
@@ -210,8 +214,38 @@ func _flex() -> Control:
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	return c
 
+func _abilities_card(abilities: Array) -> Control:
+	var holder := CenterContainer.new()
+	var lbl := Label.new()
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.custom_minimum_size = Vector2(300, 0)
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.92))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+	lbl.add_theme_constant_override("outline_size", 3)
+	if abilities.is_empty():
+		lbl.text = "This foe has no special abilities."
+	else:
+		var names: Array = []
+		for a in abilities:
+			names.append(_ability_label(String(a)))
+		lbl.text = "Watch out — " + ", ".join(names)
+	holder.add_child(lbl)
+	return holder
+
+func _ability_label(a: String) -> String:
+	match a:
+		"scramble": return "Scramble"
+		"burn": return "Burn"
+		"lock": return "Lock"
+		"stone": return "Stone"
+		"poison": return "Poison Tiles"
+		"leech": return "Leech"
+		_: return a.capitalize()
+
 func _on_back() -> void:
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	get_tree().change_scene_to_file("res://games/word_fight/world_map.tscn")
 
 func _on_start() -> void:
 	get_tree().change_scene_to_file("res://games/word_fight/word_fight.tscn")

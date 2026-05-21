@@ -88,8 +88,9 @@ const TEMPLATES := {
 
 var _wave: int = 1
 var _score: int = 0
-var _row1_bg: Control                # animated vibrant backdrop behind Row 1
+var _row1_bg: Control                # wooden backdrop behind Row 1
 var _row1_card: Control              # parent card so we can layer bg under grid
+var _row1_stack: Control             # host that the grid is scaled + centered in
 var _submit_glow: Panel              # glowing shadow ring on Submit when chain is ready
 var _score_chip: Control             # captured for confetti targeting
 var _wave_chip: Control
@@ -137,9 +138,11 @@ func _apply_design() -> void:
 	row2_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
 	row2_label.add_theme_constant_override("outline_size", 4)
 	row2_label.add_theme_font_size_override("font_size", 28)
+	row2_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	var row2_node: Control = $V/Row2
 	var caption := Label.new()
 	caption.text = "Your word (tap a letter to undo)"
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	caption.add_theme_font_size_override("font_size", 14)
 	caption.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	v.add_child(caption)
@@ -165,11 +168,13 @@ func _apply_design() -> void:
 	# Row1 — animated vibrant backdrop behind the grid.
 	var row1_lbl: Label = $V/Row1Label
 	row1_lbl.text = "Available letters — tap to use"
+	row1_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row1_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	row1_lbl.add_theme_font_size_override("font_size", 14)
 	_wrap_row1_with_bg(row1_grid, v)
 
 	# Status text styling.
+	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_lbl.add_theme_color_override("font_color", Chrome.TEXT)
 	status_lbl.add_theme_font_size_override("font_size", 16)
 	bonus_lbl.add_theme_color_override("font_color", VIBRANT_GOLD_DARK)
@@ -271,21 +276,33 @@ func _wrap_row1_with_bg(grid: GridContainer, parent: Control) -> void:
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 	parent.move_child(card, idx)
-	# Stack: animated bg fills card; grid sits on top.
+	# Stack: wooden bg fills the card; the letter grid is scaled + centered on top.
 	var stack := Control.new()
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.custom_minimum_size = Vector2(0, 240)
+	stack.custom_minimum_size = Vector2(0, 220)
 	card.add_child(stack)
-	_row1_bg = Fx.AnimatedBoardBG.new()
+	_row1_bg = Fx.BoardBG.new()
 	_row1_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_row1_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stack.add_child(_row1_bg)
-	var grid_center := CenterContainer.new()
-	grid_center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	stack.add_child(grid_center)
-	grid.reparent(grid_center, false)
+	grid.reparent(stack, false)
+	_row1_stack = stack
+	stack.resized.connect(_fit_row1)
 	_row1_card = card
+
+## Scales + centers the Row 1 letter grid so it always fits the wooden board.
+func _fit_row1() -> void:
+	if row1_grid == null or _row1_stack == null:
+		return
+	var gs := row1_grid.get_combined_minimum_size()
+	if gs.x <= 0.0 or gs.y <= 0.0:
+		return
+	var avail: Vector2 = _row1_stack.size - Vector2(20, 20)
+	var s: float = clampf(minf(avail.x / gs.x, avail.y / gs.y), 0.1, 1.0)
+	row1_grid.pivot_offset = Vector2.ZERO
+	row1_grid.scale = Vector2(s, s)
+	row1_grid.position = ((_row1_stack.size - gs * s) * 0.5).round()
 
 func _wrap_in_chip(lbl: Label, bg: Color) -> void:
 	var parent := lbl.get_parent() as Control
@@ -446,6 +463,7 @@ func _build_row1() -> void:
 		row1_grid.add_child(t)
 		_row1_tiles.append(t)
 		t.play_pop_in(i * 0.035)
+	_fit_row1.call_deferred()
 
 func _on_tile_picked_fx(t: WFoundTile, color: Color) -> void:
 	var pos := t.global_position + t.size * 0.5 - global_position
@@ -485,17 +503,32 @@ func _refresh_row2_label() -> void:
 	# tile widgets between rows (keeps Row 1 layout stable).
 	for c in row2_holder.get_children():
 		c.queue_free()
+	# Size the letter tiles off the viewport width (not the pill's own size, which
+	# would feed back on itself) so the row never overflows on small screens.
+	var count := _row2_chain.size()
+	var avail: float = 280.0
+	var vp_w: float = get_viewport_rect().size.x
+	if vp_w > 0.0:
+		avail = maxf(vp_w - 64.0, 160.0)
+	var bw: float = 36.0
+	if count > 0:
+		bw = clampf((avail - float(count - 1) * 4.0) / float(count), 24.0, 40.0)
 	for t: WFoundTile in _row2_chain:
 		var mini_btn := Button.new()
 		mini_btn.text = t.letter
-		mini_btn.custom_minimum_size = Vector2(36, 40)
+		mini_btn.custom_minimum_size = Vector2(bw, 40)
 		mini_btn.add_theme_font_size_override("font_size", 18)
 		mini_btn.focus_mode = Control.FOCUS_NONE
 		Palette.style_button(mini_btn, Palette.PINK, Color.WHITE, 10)
 		mini_btn.pressed.connect(func(): _on_row2_tile_pressed(t))
 		row2_holder.add_child(mini_btn)
-	var word := _chain_word()
-	row2_label.text = word if not word.is_empty() else "—"
+	# The tappable tiles above ARE the word preview — show the big text label
+	# only as an empty-state placeholder, so the word never spans two rows.
+	if _row2_chain.is_empty():
+		row2_label.visible = true
+		row2_label.text = "—"
+	else:
+		row2_label.visible = false
 
 func _chain_word() -> String:
 	var s := ""

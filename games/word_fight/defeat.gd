@@ -55,7 +55,7 @@ func _on_retry() -> void:
 	get_tree().change_scene_to_file("res://games/word_fight/intro.tscn")
 
 func _on_back() -> void:
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	get_tree().change_scene_to_file("res://games/word_fight/world_map.tscn")
 
 func _center_svg(path: String, size_px: int) -> Control:
 	var holder := CenterContainer.new()

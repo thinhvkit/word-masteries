@@ -5,6 +5,8 @@ extends Control
 const Tile := preload("res://games/word_fight/tile_node.gd")
 const Topics := preload("res://games/word_fight/topics.gd")
 const Fx := preload("res://games/word_fight/fx.gd")
+const Worlds := preload("res://games/word_fight/worlds.gd")
+const Items := preload("res://games/word_fight/items.gd")
 
 const ROWS := 5
 const COLS := 5
@@ -12,7 +14,7 @@ const MIN_WORD_LEN := 3
 const MIN_VOWELS := 4
 const RAINBOW_STREAK_REQUIRED := 3   # 3× consecutive 5+ letter words → rainbow
 const RAINBOW_MAX := 3                # max stored rainbow charges
-const DMG_PER_LETTER := 10
+const DMG_LEN_MULT := 8               # base damage = word_length² × this (quadratic scaling)
 const TOPIC_MULTIPLIER := 2.0
 const STREAK_BONUS := 5               # +5 per consecutive valid word (xp side)
 
@@ -25,17 +27,25 @@ const LETTER_WEIGHTS := {
 }
 const VOWELS := "AEIOU"
 
-# --- enemies ---
-const ENEMIES := [
-	{"name": "Wriggles Jr.", "hp": 110, "skill": 0.6, "avatar": "wriggles_jr"},
-	{"name": "Spelluga",     "hp": 170, "skill": 0.78, "avatar": "spelluga"},
-	{"name": "Verbosaur",    "hp": 230, "skill": 0.9, "avatar": "verbosaur"},
-	{"name": "Lexigon",      "hp": 310, "skill": 1.0, "avatar": "lexigon"},
-]
+# --- gem / hazard tuning ---
+const GEM_SPAWN_CHANCE := 0.15
+const FIRE_BONUS := 40                # bonus damage per Fire gem used
+const DIAMOND_BONUS := 150            # bonus damage per Diamond gem used
+const HEAL_PER_GEM := 350             # HP restored per Healing gem used
+const POISON_STACKS_PER_GEM := 3      # poison stacks added per Poison gem used
+const POISON_DMG_PER_STACK := 26      # enemy DoT per stack, start of its turn
+const FIRE_FUSE_START := 3            # turns a Fire gem lasts before burning away
+const FIRE_BURN_DMG := 180            # self damage when a Fire gem burns away
+const BURN_FUSE_START := 3            # turns a Burning hazard lasts
+const BURN_HAZARD_DMG := 160          # self damage when a Burning tile scorches
+const LOCK_TURNS_START := 2           # turns a Locked tile stays frozen
+const POISONED_TILE_DMG := 90         # self damage per Poisoned tile used in a word
+const LEECH_DMG := 150                # HP drained per turn while leeched
+const LEECH_TURNS := 3                # duration of the Leech ability
+const MAX_STONE := 3                  # cap on Stone tiles to avoid soft-locks
 
-func _enemy_avatar_path(idx: int) -> String:
-	var e: Dictionary = ENEMIES[idx % ENEMIES.size()]
-	return "res://assets/avatars/%s.svg" % str(e.get("avatar", "octopus"))
+func _enemy_avatar_path() -> String:
+	return "res://assets/avatars/%s.svg" % str(_enemy.get("avatar", "octopus"))
 
 const UI := preload("res://scripts/results_ui.gd")
 const Chrome := preload("res://scripts/screen_chrome.gd")
@@ -65,13 +75,14 @@ var enemy_name_label: Label
 var player_hp_bar: ProgressBar
 var enemy_hp_bar: ProgressBar
 var status_label: Label
+var player_status_label: Label
+var enemy_status_label: Label
 var submit_btn: Button
 var clear_btn: Button
 var rainbow_btn: Button
 var back_btn: Button
 var streak_dots_row: HBoxContainer
 var board_bg: Control                  # animated gradient backdrop behind the 5x5
-var chain_overlay: Control             # draws connector lines between selected tiles
 var board_wrap: Control
 var player_avatar: Control
 var enemy_avatar: Control
@@ -80,14 +91,15 @@ var rainbow_sweep: ColorRect
 
 const RAINBOW_DAMAGE_MULT := 2
 
-const PLAYER_MAX_HP := 200
-
 var _tiles: Array = []                 # row-major Array of Tile (size 25), nullable
 var _selected: Array = []              # ordered Array of Tile in player's current chain
-var _player_hp: int = PLAYER_MAX_HP
-var _enemy_hp: int = 100
-var _enemy_max_hp: int = 100
+var _player_max_hp: int = 1000         # set from Lex level + items in _start_battle
+var _player_hp: int = 1000
+var _enemy_hp: int = 1000
+var _enemy_max_hp: int = 1000
 var _enemy_idx: int = 0
+var _world_idx: int = 0
+var _enemy: Dictionary = {}            # current enemy data from WFWorlds
 var _topic: String = "food"
 var _player_streak_5plus: int = 0
 var _player_word_streak: int = 0
@@ -96,6 +108,11 @@ var _used_words: Dictionary = {}       # word(lower) -> true, per-enemy
 var _is_player_turn: bool = true
 var _busy: bool = false                # animations/AI
 var _rainbow_pending: bool = false     # next submitted word gets RAINBOW_DAMAGE_MULT
+
+# Combatant status effects.
+var _enemy_frozen: bool = false        # skips its next turn (Ice gem)
+var _enemy_poison: int = 0             # poison stacks — DoT at the start of its turn
+var _leech_turns: int = 0              # Leech ability — drains the player each turn
 
 # Per-battle stats (read by victory/defeat screens via GameState.wf_session).
 var _damage_dealt: int = 0
@@ -108,7 +125,9 @@ var _score_earned: int = 0
 func _ready() -> void:
 	# Honor intro screen's enemy + topic selection BEFORE building UI so the header chip is right.
 	var session: Dictionary = GameState.wf_session
+	_world_idx = int(session.get("world_idx", 0))
 	_enemy_idx = int(session.get("enemy_idx", 0))
+	_enemy = Worlds.enemy(_world_idx, _enemy_idx)
 	var seeded_topic: String = String(session.get("topic", ""))
 	if not seeded_topic.is_empty():
 		_topic = seeded_topic
@@ -134,11 +153,11 @@ func _build_ui() -> void:
 	var body := VBoxContainer.new()
 	body.anchor_right = 1.0
 	body.anchor_bottom = 1.0
-	body.offset_left = 16
-	body.offset_top = Chrome.HEADER_H + 12
-	body.offset_right = -16
-	body.offset_bottom = -12
-	body.add_theme_constant_override("separation", 14)
+	body.offset_left = 12
+	body.offset_top = Chrome.HEADER_H + 8
+	body.offset_right = -12
+	body.offset_bottom = -8
+	body.add_theme_constant_override("separation", 8)
 	add_child(body)
 
 	# Player HP row — avatar on the LEFT, bar fills to the right (player facing right).
@@ -148,12 +167,14 @@ func _build_ui() -> void:
 	var p_row := _hp_row(SAGE, player_svg, player_hp_bar, player_hp_label, false)
 	player_avatar = p_row.get_child(0) as Control
 	body.add_child(p_row)
-	player_hp_label.text = "200"
+	player_hp_label.text = "1000"
+	player_status_label = _make_status_label(Color("#c0392b"), HORIZONTAL_ALIGNMENT_LEFT)
+	body.add_child(player_status_label)
 
 	# Enemy HP row — MIRRORED: avatar on the RIGHT, bar fills to the left (enemy facing left).
 	enemy_hp_bar = _hp_bar(HP_PINK, true)
 	enemy_hp_label = Label.new()
-	var enemy_svg := _enemy_avatar_path(_enemy_idx)
+	var enemy_svg := _enemy_avatar_path()
 	var e_row := _hp_row(HP_PINK, enemy_svg, enemy_hp_bar, enemy_hp_label, true)
 	# Avatar is now the LAST child when mirrored.
 	enemy_avatar = e_row.get_child(e_row.get_child_count() - 1) as Control
@@ -161,6 +182,8 @@ func _build_ui() -> void:
 	enemy_name_label.visible = false
 	add_child(enemy_name_label)
 	body.add_child(e_row)
+	enemy_status_label = _make_status_label(Color("#1f9fff"), HORIZONTAL_ALIGNMENT_RIGHT)
+	body.add_child(enemy_status_label)
 	# Kick off idle breathing animations on both avatars.
 	_start_idle_bob(player_avatar)
 	_start_idle_bob(enemy_avatar)
@@ -177,59 +200,58 @@ func _build_ui() -> void:
 	wp_sb.border_color = PINK_PILL_BORDER
 	wp_sb.content_margin_left = 20
 	wp_sb.content_margin_right = 20
-	wp_sb.content_margin_top = 16
-	wp_sb.content_margin_bottom = 16
+	wp_sb.content_margin_top = 10
+	wp_sb.content_margin_bottom = 10
 	wp_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.2)
 	wp_sb.shadow_size = 6
 	wp_sb.shadow_offset = Vector2i(0, 2)
 	word_pill.add_theme_stylebox_override("panel", wp_sb)
-	var word_row := HBoxContainer.new()
-	word_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	word_row.add_theme_constant_override("separation", 10)
+	# Vertical stack: caption / word / damage — the word gets the full pill width
+	# so long chains never push the layout past the screen edge.
+	var word_col := VBoxContainer.new()
+	word_col.add_theme_constant_override("separation", 2)
 	var prefix := Label.new()
-	prefix.text = "Your word:"
+	prefix.text = "Your word"
+	prefix.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prefix.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	prefix.add_theme_font_size_override("font_size", 15)
-	word_row.add_child(prefix)
+	prefix.add_theme_font_size_override("font_size", 13)
+	word_col.add_child(prefix)
 	current_word_label = Label.new()
 	current_word_label.text = "—"
+	current_word_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	current_word_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	current_word_label.add_theme_color_override("font_color", HP_PINK_DARK)
 	current_word_label.add_theme_font_size_override("font_size", 24)
-	word_row.add_child(current_word_label)
+	word_col.add_child(current_word_label)
 	dmg_preview_label = Label.new()
 	dmg_preview_label.text = ""
+	dmg_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dmg_preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dmg_preview_label.add_theme_color_override("font_color", SAGE_DARK)
-	dmg_preview_label.add_theme_font_size_override("font_size", 14)
-	word_row.add_child(dmg_preview_label)
-	word_pill.add_child(word_row)
+	dmg_preview_label.add_theme_font_size_override("font_size", 16)
+	word_col.add_child(dmg_preview_label)
+	word_pill.add_child(word_col)
 	body.add_child(word_pill)
 
-	# Board — animated gradient backdrop fills all leftover vertical space;
-	# the grid stays centered inside it. Removes the dead area below the board.
+	# Board — animated gradient backdrop fills all leftover vertical space; the
+	# letter grid is scaled + centered inside it so it fits any screen size.
 	var board_panel := Control.new()
 	board_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	# Minimum so the board never collapses below tile size on small screens.
-	board_panel.custom_minimum_size = Vector2(COLS * 56 + (COLS - 1) * 10 + 24, ROWS * 56 + (ROWS - 1) * 10 + 24)
-	board_bg = Fx.AnimatedBoardBG.new()
+	# A modest floor only — the grid scales down to whatever space remains.
+	board_panel.custom_minimum_size = Vector2(200, 200)
+	board_bg = Fx.BoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	board_panel.add_child(board_bg)
-	var grid_center := CenterContainer.new()
-	grid_center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	board_panel.add_child(grid_center)
 	grid = GridContainer.new()
 	grid.columns = COLS
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
-	grid_center.add_child(grid)
-	chain_overlay = _ChainOverlay.new()
-	chain_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	chain_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	board_panel.add_child(chain_overlay)
-	# board_wrap's old role (CenterContainer parent for coordinate translation)
-	# is now played by board_panel itself; alias them so existing FX code works.
+	board_panel.add_child(grid)
+	# board_wrap is the coordinate space for board FX.
 	board_wrap = board_panel
+	board_panel.resized.connect(_fit_board)
 	body.add_child(board_panel)
 
 	# Boosters row: 4 streak dots + "streak" label on left, rainbow chip on right.
@@ -307,8 +329,9 @@ func _build_ui() -> void:
 	status_label = Label.new()
 	status_label.text = ""
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	status_label.add_theme_font_size_override("font_size", 16)
+	status_label.add_theme_font_size_override("font_size", 18)
 	body.add_child(status_label)
 
 # ---- HP row helpers ----
@@ -379,21 +402,37 @@ func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label
 		row.add_child(value_lbl)
 	return row
 
+# Small per-combatant status line (Frozen / Poison / Leeched).
+func _make_status_label(color: Color, align: int) -> Label:
+	var l := Label.new()
+	l.add_theme_font_size_override("font_size", 14)
+	l.add_theme_color_override("font_color", color)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.horizontal_alignment = align
+	l.visible = false
+	return l
+
 # ---------------- battle setup ----------------
 
 func _start_battle(idx: int) -> void:
 	_enemy_idx = idx
-	var e: Dictionary = ENEMIES[idx % ENEMIES.size()]
-	_enemy_max_hp = int(e.hp)
+	_enemy = Worlds.enemy(_world_idx, _enemy_idx)
+	_enemy_max_hp = int(_enemy.hp)
 	_enemy_hp = _enemy_max_hp
+	_player_max_hp = GameState.lex_max_hp() + int(Items.sum_effect("max_hp_bonus"))
+	_player_hp = _player_max_hp
 	# Honor the topic seeded by intro; otherwise (e.g. game launched standalone) roll one.
 	var seeded: String = String(GameState.wf_session.get("topic", ""))
-	_topic = seeded if not seeded.is_empty() else Topics.random_topic()
+	_topic = seeded if not seeded.is_empty() else Worlds.random_topic(_world_idx)
 	GameState.wf_session["topic"] = _topic
 	_used_words.clear()
 	_player_streak_5plus = 0
 	_player_word_streak = 0
 	_rainbow_pending = false
+	_enemy_frozen = false
+	_enemy_poison = 0
+	_leech_turns = 0
+	_rainbows = clampi(int(Items.sum_effect("start_rainbow")), 0, RAINBOW_MAX)
 	_damage_dealt = 0
 	_words_used = 0
 	_longest_word = ""
@@ -401,7 +440,7 @@ func _start_battle(idx: int) -> void:
 	_rainbows_used = 0
 	_score_earned = 0
 	_clear_chain()
-	enemy_name_label.text = e.name
+	enemy_name_label.text = _enemy.name
 	topic_label.text = "Topic: %s  (×2 dmg)" % _topic.capitalize()
 	_build_board()
 	_refresh_hud()
@@ -425,6 +464,21 @@ func _build_board() -> void:
 			var col := i % COLS
 			var d: float = (row + col) * 0.04
 			t.play_pop_in(d)
+	_fit_board.call_deferred()
+
+## Scales + centers the letter grid so the whole board fits the panel on any
+## screen size. Re-run whenever the board panel is resized.
+func _fit_board() -> void:
+	if grid == null or board_wrap == null:
+		return
+	var gs := grid.get_combined_minimum_size()
+	if gs.x <= 0.0 or gs.y <= 0.0:
+		return
+	var avail: Vector2 = board_wrap.size - Vector2(16, 16)
+	var s: float = clampf(minf(avail.x / gs.x, avail.y / gs.y), 0.1, 1.0)
+	grid.pivot_offset = Vector2.ZERO
+	grid.scale = Vector2(s, s)
+	grid.position = ((board_wrap.size - gs * s) * 0.5).round()
 
 func _spawn_tile_at(idx: int, letter: String, rainbow: bool = false) -> void:
 	var t: Tile = Tile.new()
@@ -435,13 +489,37 @@ func _spawn_tile_at(idx: int, letter: String, rainbow: bool = false) -> void:
 	grid.add_child(t)
 	grid.move_child(t, idx)
 	_tiles[idx] = t
+	_roll_and_apply_gem(t)
+
+## Resets a tile's special state, then maybe rolls a fresh gem onto it.
+func _roll_and_apply_gem(t: Tile) -> void:
+	t.reset_special()
+	var chance := GEM_SPAWN_CHANCE + Items.sum_effect("gem_rate_bonus")
+	if randf() < chance:
+		t.gem = _weighted_gem()
+		if t.gem == Tile.Gem.FIRE:
+			t.fire_fuse = FIRE_FUSE_START
+
+## Weighted random pick of a non-NORMAL gem type.
+func _weighted_gem() -> int:
+	var weights := [
+		[Tile.Gem.FIRE, 22], [Tile.Gem.HEALING, 20], [Tile.Gem.POISON, 18],
+		[Tile.Gem.ICE, 16], [Tile.Gem.GOLD, 16], [Tile.Gem.DIAMOND, 8],
+	]
+	var total := 0
+	for w in weights:
+		total += int(w[1])
+	var r := randi() % total
+	for w in weights:
+		r -= int(w[1])
+		if r < 0:
+			return int(w[0])
+	return Tile.Gem.FIRE
 
 func _on_tile_selected_fx(tile: Tile, color: Color) -> void:
 	if board_wrap == null: return
 	var pos := tile.global_position + tile.size * 0.5 - board_wrap.global_position
 	Fx.sparkle_burst(board_wrap, pos, color, 7)
-	if chain_overlay != null:
-		chain_overlay.queue_redraw()
 
 func _rand_letter(force_vowel: bool = false) -> String:
 	if force_vowel:
@@ -482,6 +560,10 @@ func _enforce_vowel_minimum() -> void:
 func _on_tile_pressed(tile: Tile) -> void:
 	if _busy or not _is_player_turn:
 		return
+	if tile.is_blocked():
+		var why := "That tile is locked!" if tile.hazard == Tile.Hazard.LOCKED else "That tile is solid stone!"
+		_flash_status(why, Color(0.6, 0.45, 0.25))
+		return
 	if tile.selected_order >= 0:
 		# Tapping a selected tile: pop chain back to (and including) this tile.
 		var idx := tile.selected_order
@@ -499,30 +581,64 @@ func _clear_chain() -> void:
 	_selected.clear()
 	_refresh_current_word()
 
+## Usable text width inside the word pill — drives word-label font shrinking.
+func _word_box_width() -> float:
+	return maxf(get_viewport_rect().size.x - 80.0, 120.0)
+
 func _refresh_current_word() -> void:
 	var w := _chain_word()
-	current_word_label.text = w if not w.is_empty() else "—"
+	Fx.fit_label_font(current_word_label, w if not w.is_empty() else "—", 24, _word_box_width())
 	submit_btn.disabled = w.length() < MIN_WORD_LEN
-	# Live damage preview.
+	# Live damage preview — gem-aware.
 	if w.length() >= MIN_WORD_LEN:
-		var dmg := w.length() * DMG_PER_LETTER
+		var dmg := _calc_damage(_selected, w, _rainbow_pending)
 		var topic_match := Topics.has(_topic, w.to_lower())
+		var note := ""
 		if topic_match:
-			dmg = int(dmg * TOPIC_MULTIPLIER)
-		if _rainbow_pending:
-			dmg *= RAINBOW_DAMAGE_MULT
-		dmg_preview_label.text = "+%d dmg%s" % [dmg, "  ×2!" if topic_match else ""]
+			note += "  ×2!"
+		var poisoned := 0
+		for t: Tile in _selected:
+			if t.hazard == Tile.Hazard.POISONED:
+				poisoned += 1
+		if poisoned > 0 and not Items.has_effect("poison_immune"):
+			note += "  (-%d hp)" % (poisoned * POISONED_TILE_DMG)
+		dmg_preview_label.text = "+%d dmg%s" % [dmg, note]
 	else:
 		dmg_preview_label.text = ""
-	if chain_overlay != null:
-		(chain_overlay as _ChainOverlay).set_tiles(_selected, board_wrap)
 	_update_submit_glow(w.length())
+
+## Final damage for a word given its tiles — folds in gems, topic, gold, rainbow
+## and equipped-item multipliers. Used by both the live preview and submit.
+func _calc_damage(tiles: Array, word: String, use_rainbow: bool) -> int:
+	var fire := 0
+	var gold := 0
+	var diamond := 0
+	for t in tiles:
+		match (t as Tile).gem:
+			Tile.Gem.FIRE: fire += 1
+			Tile.Gem.GOLD: gold += 1
+			Tile.Gem.DIAMOND: diamond += 1
+	var d := float(_word_damage(word.length()))
+	d += float(fire) * FIRE_BONUS * Items.mult_effect("fire_bonus_mult")
+	d += float(diamond) * DIAMOND_BONUS
+	if Topics.has(_topic, word.to_lower()):
+		d *= TOPIC_MULTIPLIER
+	if gold > 0:
+		d *= (1.0 + float(gold))
+	if use_rainbow:
+		d *= float(RAINBOW_DAMAGE_MULT)
+	d *= Items.mult_effect("dmg_mult")
+	return int(round(d))
 
 func _chain_word() -> String:
 	var s := ""
 	for t: Tile in _selected:
 		s += t.letter
 	return s
+
+## Base damage for a word — scales quadratically with length (length² × DMG_LEN_MULT).
+func _word_damage(word_len: int) -> int:
+	return word_len * word_len * DMG_LEN_MULT
 
 # ---------------- submit ----------------
 
@@ -540,12 +656,23 @@ func _submit_player_word() -> void:
 	_used_words[word] = true
 
 	var topic_match := Topics.has(_topic, word)
-	var dmg := word.length() * DMG_PER_LETTER
-	if topic_match:
-		dmg = int(dmg * TOPIC_MULTIPLIER)
 	var rainbow_used := _rainbow_pending
+	# Tally gems + hazards in the chain.
+	var fire_count := 0
+	var ice_count := 0
+	var poison_count := 0
+	var heal_count := 0
+	var poisoned_hazard := 0
+	for t: Tile in _selected:
+		match t.gem:
+			Tile.Gem.FIRE: fire_count += 1
+			Tile.Gem.ICE: ice_count += 1
+			Tile.Gem.POISON: poison_count += 1
+			Tile.Gem.HEALING: heal_count += 1
+		if t.hazard == Tile.Hazard.POISONED:
+			poisoned_hazard += 1
+	var dmg := _calc_damage(_selected, word, rainbow_used)
 	if rainbow_used:
-		dmg *= RAINBOW_DAMAGE_MULT
 		_rainbow_pending = false
 		for tx: Tile in _tiles:
 			if tx != null:
@@ -559,6 +686,22 @@ func _submit_player_word() -> void:
 
 	_enemy_hp = maxi(0, _enemy_hp - dmg)
 	_player_word_streak += 1
+
+	# --- gem side effects ---
+	if ice_count > 0:
+		_enemy_frozen = true
+	if poison_count > 0:
+		_enemy_poison += poison_count * POISON_STACKS_PER_GEM
+	if heal_count > 0:
+		var healed := mini(heal_count * HEAL_PER_GEM, _player_max_hp - _player_hp)
+		_player_hp += healed
+		if healed > 0 and player_avatar != null and is_inside_tree():
+			Fx.heal_popup(self, _avatar_center(player_avatar) + Vector2(20, -10), healed)
+	# Poisoned hazard tiles bite back when used in a word.
+	if poisoned_hazard > 0 and not Items.has_effect("poison_immune"):
+		var self_dmg := _damage_player(poisoned_hazard * POISONED_TILE_DMG)
+		if player_avatar != null and is_inside_tree():
+			Fx.damage_popup(self, _avatar_center(player_avatar) + Vector2(20, -10), self_dmg, false, Color("#7ad14f"))
 
 	# Stats for victory/defeat screens.
 	_damage_dealt += dmg
@@ -583,30 +726,44 @@ func _submit_player_word() -> void:
 	var tag := ""
 	if topic_match: tag += "  ×2 TOPIC!"
 	if rainbow_used: tag += "  RAINBOW ×%d!" % RAINBOW_DAMAGE_MULT
+	if ice_count > 0: tag += "  FROZEN!"
+	if poison_count > 0: tag += "  POISON!"
 	_flash_hit("%s for %d dmg%s" % [word_up, dmg, tag])
 
 	# ----- HIT FX -----
-	if enemy_avatar != null and is_inside_tree():
-		var hit_pos := enemy_avatar.global_position + enemy_avatar.size * 0.5 - global_position
-		Fx.damage_popup(self, hit_pos + Vector2(20, -10), dmg, dmg >= 80, Fx.damage_color_for(dmg))
-		Fx.shake(enemy_avatar, 8.0, 0.35)
-		_avatar_lean(enemy_avatar, true)   # enemy leans right (away from player on the left)
-	# Confetti from selected tiles toward enemy avatar.
-	if board_wrap != null and enemy_avatar != null:
-		var froms: Array = []
-		var cols: Array = []
-		for t: Tile in _selected:
-			froms.append(t.global_position + t.size * 0.5 - global_position)
-			var g := Fx.gradient_for_letter(t.letter)
-			cols.append(g[1])
-		var target := enemy_avatar.global_position + enemy_avatar.size * 0.5 - global_position
-		Fx.confetti_to(self, froms, target, cols)
-	# Screen shake on big damage.
-	if dmg >= 80:
-		Fx.shake(self, 4.0, 0.25)
+	var big_hit := dmg >= 350
+	if enemy_avatar != null and player_avatar != null and is_inside_tree():
+		_avatar_lunge(player_avatar, true)            # player swings toward the enemy
+		# Confetti from the selected tiles, trailing the word energy toward the enemy.
+		if board_wrap != null:
+			var froms: Array = []
+			var cols: Array = []
+			for t: Tile in _selected:
+				froms.append(t.global_position + t.size * 0.5 - global_position)
+				cols.append(Fx.gem_accent(t.gem) if t.gem != Tile.Gem.NORMAL else Fx.SELECT_BOTTOM)
+			Fx.confetti_to(self, froms, _avatar_center(enemy_avatar), cols)
+		# Word-energy bolt flies from the player; the hit reaction lands on impact.
+		var dcolor := Fx.damage_color_for(dmg)
+		var on_hit := func() -> void:
+			if not is_inside_tree() or enemy_avatar == null: return
+			var ec := _avatar_center(enemy_avatar)
+			Fx.impact_burst(self, ec, dcolor, big_hit)
+			Fx.damage_popup(self, ec + Vector2(20, -10), dmg, big_hit, dcolor)
+			Fx.hit_flash(enemy_avatar)
+			Fx.shake(enemy_avatar, 11.0 if big_hit else 7.0, 0.38)
+			_avatar_lean(enemy_avatar, true)
+			if big_hit:
+				Fx.slash(self, ec, Color.WHITE)
+				Fx.shake(self, 5.0, 0.28)
+		Fx.strike_bolt(self, _avatar_center(player_avatar) + Vector2(16, -4),
+			_avatar_center(enemy_avatar), Color("#7fd9ff"), on_hit)
 	# Topic banner.
 	if topic_match:
 		Fx.banner(self, "×2 TOPIC!", Color("#ffc844"), Color("#7a4a00"))
+	if ice_count > 0:
+		Fx.banner(self, "ENEMY FROZEN!", Color("#4db4ff"), Color.WHITE)
+	elif poison_count > 0:
+		Fx.banner(self, "POISONED!", Color("#3da94f"), Color.WHITE)
 	# Rainbow earn fireworks (just earned this submit?).
 	if word.length() >= 5 and _player_streak_5plus == 0 and _rainbows > 0:
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
@@ -616,6 +773,9 @@ func _submit_player_word() -> void:
 
 	if _enemy_hp <= 0:
 		_on_enemy_defeated()
+		return
+	if _player_hp <= 0:
+		_defeat()
 		return
 	_is_player_turn = false
 	_busy = true
@@ -633,6 +793,7 @@ func _consume_selected_and_refill(player_triggered: bool) -> void:
 		await get_tree().create_timer(0.18).timeout
 	for t: Tile in consumed:
 		t.letter = _rand_letter()
+		_roll_and_apply_gem(t)
 		t.selected_order = -1
 		t.scale = Vector2(1, 1)
 		t.modulate.a = 1.0
@@ -644,7 +805,31 @@ func _consume_selected_and_refill(player_triggered: bool) -> void:
 # ---------------- enemy AI ----------------
 
 func _enemy_turn() -> void:
-	var skill: float = float(ENEMIES[_enemy_idx % ENEMIES.size()].skill)
+	var skill: float = float(_enemy.skill)
+	# Poison damage-over-time ticks at the start of the enemy's turn.
+	if _enemy_poison > 0:
+		var pd := _enemy_poison * POISON_DMG_PER_STACK
+		_enemy_hp = maxi(0, _enemy_hp - pd)
+		_enemy_poison -= 1
+		_set_status("%s suffers %d poison damage!" % [_enemy.get("name", "Enemy"), pd])
+		if enemy_avatar != null and is_inside_tree():
+			Fx.damage_popup(self, _avatar_center(enemy_avatar) + Vector2(20, -10), pd, false, Color("#7ad14f"))
+		_refresh_hud()
+		await get_tree().create_timer(0.7).timeout
+		if _enemy_hp <= 0:
+			_on_enemy_defeated()
+			return
+	# Frozen — the enemy loses its whole turn.
+	if _enemy_frozen:
+		_enemy_frozen = false
+		_set_status("%s is frozen solid — turn skipped!" % _enemy.get("name", "Enemy"))
+		Fx.banner(self, "ENEMY FROZEN!", Color("#4db4ff"), Color.WHITE)
+		_refresh_hud()
+		await get_tree().create_timer(1.0).timeout
+		_end_enemy_turn()
+		return
+	# Maybe sabotage the board before attacking.
+	await _maybe_enemy_ability(skill)
 	_set_status("Enemy is thinking…")
 	var pick: Dictionary = await _enemy_pick_word_async(skill)
 	if pick.is_empty():
@@ -666,20 +851,30 @@ func _enemy_turn() -> void:
 	_set_status("Enemy plays %s…" % word.to_upper())
 	await get_tree().create_timer(0.7).timeout
 	var topic_match := Topics.has(_topic, word)
-	var dmg: int = word.length() * DMG_PER_LETTER
+	var raw_dmg: int = _word_damage(word.length())
 	if topic_match:
-		dmg = int(dmg * TOPIC_MULTIPLIER)
-	_player_hp = maxi(0, _player_hp - dmg)
+		raw_dmg = int(raw_dmg * TOPIC_MULTIPLIER)
+	var dmg := _damage_player(raw_dmg)
 	_used_words[word] = true
 	_set_status("Enemy played %s for %d dmg%s" % [word.to_upper(), dmg, "  ×2 TOPIC!" if topic_match else ""])
 	# ----- ENEMY HIT FX on the player -----
-	if player_avatar != null and is_inside_tree():
-		var p_pos := player_avatar.global_position + player_avatar.size * 0.5 - global_position
-		Fx.damage_popup(self, p_pos + Vector2(20, -10), dmg, dmg >= 80, Fx.damage_color_for(dmg))
-		Fx.shake(player_avatar, 8.0, 0.35)
-		_avatar_lean(player_avatar, false)   # player leans left (away from enemy on the right)
-	if dmg >= 80:
-		Fx.shake(self, 4.0, 0.25)
+	var e_big := dmg >= 350
+	if player_avatar != null and enemy_avatar != null and is_inside_tree():
+		_avatar_lunge(enemy_avatar, false)            # enemy swings toward the player
+		var dcolor := Fx.damage_color_for(dmg)
+		var on_hit := func() -> void:
+			if not is_inside_tree() or player_avatar == null: return
+			var pc := _avatar_center(player_avatar)
+			Fx.impact_burst(self, pc, dcolor, e_big)
+			Fx.damage_popup(self, pc + Vector2(20, -10), dmg, e_big, dcolor)
+			Fx.hit_flash(player_avatar)
+			Fx.shake(player_avatar, 11.0 if e_big else 7.0, 0.38)
+			_avatar_lean(player_avatar, false)
+			if e_big:
+				Fx.slash(self, pc, Color("#ff5a6e"))
+				Fx.shake(self, 5.0, 0.28)
+		Fx.strike_bolt(self, _avatar_center(enemy_avatar) + Vector2(-16, -4),
+			_avatar_center(player_avatar), Color("#c5402f"), on_hit)
 	# Hold on the hit reaction before the tiles dissolve.
 	await get_tree().create_timer(0.7).timeout
 	# Consume + refill those tiles.
@@ -689,13 +884,7 @@ func _enemy_turn() -> void:
 	_consume_selected_and_refill(false)
 	_refresh_hud()
 	if _player_hp <= 0:
-		_set_status("You were defeated!")
-		_busy = true
-		_is_player_turn = false
-		_dim_board(false)
-		await get_tree().create_timer(0.8).timeout
-		_publish_session(false)
-		get_tree().change_scene_to_file("res://games/word_fight/defeat.tscn")
+		_defeat()
 		return
 	_end_enemy_turn()
 
@@ -703,15 +892,177 @@ func _end_enemy_turn() -> void:
 	_busy = false
 	_is_player_turn = true
 	_dim_board(false)
+	_tick_player_turn_start()
+	if _player_hp <= 0:
+		_defeat()
+		return
 	_set_status(status_label.text + "  |  Your turn.")
 	_refresh_hud()
+
+## Plays the defeat sting and routes to the defeat screen.
+func _defeat() -> void:
+	_set_status("You were defeated!")
+	_busy = true
+	_is_player_turn = false
+	_dim_board(false)
+	await get_tree().create_timer(0.8).timeout
+	_publish_session(false)
+	get_tree().change_scene_to_file("res://games/word_fight/defeat.tscn")
+
+## Center of an avatar panel in this Control's local space.
+func _avatar_center(node: Control) -> Vector2:
+	return node.global_position + node.size * 0.5 - global_position
+
+## Applies damage to the player through armor mitigation. Returns the amount dealt.
+func _damage_player(raw: int) -> int:
+	var final := maxi(0, int(round(float(raw) * Items.mult_effect("dmg_taken_mult"))))
+	_player_hp = maxi(0, _player_hp - final)
+	return final
+
+# ---------------- enemy abilities ----------------
+
+## Rolls whether the enemy sabotages the board, then runs one of its abilities.
+func _maybe_enemy_ability(skill: float) -> void:
+	var abilities: Array = _enemy.get("abilities", [])
+	if abilities.is_empty():
+		return
+	if randf() > (0.3 + skill * 0.3):
+		return
+	await _run_enemy_ability(String(abilities[randi() % abilities.size()]))
+
+func _run_enemy_ability(ability: String) -> void:
+	var ename: String = _enemy.get("name", "Enemy")
+	match ability:
+		"scramble":
+			_set_status("%s scrambles your letters!" % ename)
+			Fx.banner(self, "SCRAMBLE!", Color("#b06cff"), Color.WHITE)
+			_scramble_board()
+		"burn":
+			var n := _apply_hazard_to_random(Tile.Hazard.BURNING, 3)
+			_set_status("%s sets %d tiles ablaze!" % [ename, n])
+			Fx.banner(self, "BURN!", Color("#ff5a3c"), Color.WHITE)
+		"lock":
+			var n := _apply_hazard_to_random(Tile.Hazard.LOCKED, 2)
+			_set_status("%s freezes %d tiles!" % [ename, n])
+			Fx.banner(self, "LOCK!", Color("#4db4ff"), Color.WHITE)
+		"stone":
+			var n := _apply_hazard_to_random(Tile.Hazard.STONE, 1)
+			_set_status("%s turns a tile to stone!" % ename if n > 0 else "%s tried to cast Stone." % ename)
+			Fx.banner(self, "STONE!", Color("#8a8a90"), Color.WHITE)
+		"poison":
+			var n := _apply_hazard_to_random(Tile.Hazard.POISONED, 3)
+			_set_status("%s poisons %d tiles!" % [ename, n])
+			Fx.banner(self, "POISON TILES!", Color("#3da94f"), Color.WHITE)
+		"leech":
+			_leech_turns = LEECH_TURNS
+			_set_status("%s casts Leech — your HP will drain!" % ename)
+			Fx.banner(self, "LEECH!", Color("#c0392b"), Color.WHITE)
+	_refresh_hud()
+	await get_tree().create_timer(1.1).timeout
+
+## Shuffles the letters of every selectable tile.
+func _scramble_board() -> void:
+	var movable: Array = []
+	var letters: Array = []
+	for t: Tile in _tiles:
+		if t != null and not t.is_blocked():
+			movable.append(t)
+			letters.append(t.letter)
+	letters.shuffle()
+	for i in movable.size():
+		var t: Tile = movable[i]
+		t.letter = String(letters[i])
+		t.play_pop_in(0.0)
+	_clear_chain()
+	_enforce_vowel_minimum()
+
+## Applies a hazard to up to `count` random hazard-free tiles. Returns how many.
+func _apply_hazard_to_random(hazard_type: int, count: int) -> int:
+	var candidates: Array = []
+	for t: Tile in _tiles:
+		if t != null and t.hazard == Tile.Hazard.NONE:
+			candidates.append(t)
+	candidates.shuffle()
+	var applied := 0
+	for t: Tile in candidates:
+		if applied >= count:
+			break
+		if hazard_type == Tile.Hazard.STONE and _count_hazard(Tile.Hazard.STONE) >= MAX_STONE:
+			break
+		t.hazard = hazard_type
+		if hazard_type == Tile.Hazard.BURNING:
+			t.burn_fuse = BURN_FUSE_START
+		elif hazard_type == Tile.Hazard.LOCKED:
+			t.lock_turns = LOCK_TURNS_START
+		t.play_pop_in(0.0)
+		applied += 1
+	return applied
+
+func _count_hazard(hazard_type: int) -> int:
+	var c := 0
+	for t: Tile in _tiles:
+		if t != null and t.hazard == hazard_type:
+			c += 1
+	return c
+
+## Start-of-player-turn upkeep: regen, leech drain, fire/burn/lock countdowns.
+func _tick_player_turn_start() -> void:
+	var p_pos := Vector2.ZERO
+	if player_avatar != null and is_inside_tree():
+		p_pos = _avatar_center(player_avatar) + Vector2(20, -10)
+	# Healing-pendant regen.
+	var regen := int(Items.sum_effect("heal_per_turn"))
+	if regen > 0 and _player_hp < _player_max_hp:
+		var healed := mini(regen, _player_max_hp - _player_hp)
+		_player_hp += healed
+		if healed > 0:
+			Fx.heal_popup(self, p_pos, healed)
+	# Leech drain.
+	if _leech_turns > 0:
+		_leech_turns -= 1
+		var taken := _damage_player(LEECH_DMG)
+		_enemy_hp = mini(_enemy_max_hp, _enemy_hp + taken)
+		Fx.damage_popup(self, p_pos, taken, false, Color("#c0392b"))
+	# Tile timers: fire fuses, burning fuses, lock countdowns.
+	for t: Tile in _tiles:
+		if t == null:
+			continue
+		if t.gem == Tile.Gem.FIRE:
+			t.fire_fuse -= 1
+			if t.fire_fuse <= 0:
+				var burned := _damage_player(FIRE_BURN_DMG)
+				_tile_scorch_fx(t, burned)
+				t.reset_special()
+				t.letter = _rand_letter()
+				t.play_pop_in(0.0)
+		elif t.hazard == Tile.Hazard.BURNING:
+			t.burn_fuse -= 1
+			if t.burn_fuse <= 0:
+				var scorch := _damage_player(BURN_HAZARD_DMG)
+				_tile_scorch_fx(t, scorch)
+				t.hazard = Tile.Hazard.NONE
+				t.burn_fuse = 0
+		elif t.hazard == Tile.Hazard.LOCKED:
+			t.lock_turns -= 1
+			if t.lock_turns <= 0:
+				t.hazard = Tile.Hazard.NONE
+				t.lock_turns = 0
+	_enforce_vowel_minimum()
+
+func _tile_scorch_fx(t: Tile, dmg: int) -> void:
+	if not is_inside_tree():
+		return
+	if board_wrap != null:
+		Fx.sparkle_burst(board_wrap, t.global_position + t.size * 0.5 - board_wrap.global_position,
+			Color("#ff6a1f"), 8)
+	Fx.damage_popup(self, t.global_position + t.size * 0.5 - global_position, dmg, false, Color("#ff7a1f"))
 
 func _enemy_pick_word_async(skill: float) -> Dictionary:
 	# Build letter pool from board. Enemy may use any tile but each tile only once
 	# per word (same constraint as player chaining without revisits).
 	var letters := ""
 	for t: Tile in _tiles:
-		if t != null:
+		if t != null and not t.is_blocked():
 			letters += t.letter.to_lower()
 	# Run the dictionary scan on a worker thread so the main thread keeps rendering.
 	# Words.words_from_letters only reads immutable post-load data, so it's thread-safe.
@@ -765,7 +1116,7 @@ func _resolve_path_for_word(word: String) -> Array:
 			if used.has(i):
 				continue
 			var t: Tile = _tiles[i]
-			if t != null and t.letter == ch:
+			if t != null and not t.is_blocked() and t.letter == ch:
 				found = i
 				break
 		if found == -1:
@@ -779,19 +1130,37 @@ func _resolve_path_for_word(word: String) -> Array:
 func _refresh_hud() -> void:
 	player_hp_label.text = "%d" % _player_hp
 	enemy_hp_label.text = "%d" % _enemy_hp
-	player_hp_bar.max_value = PLAYER_MAX_HP
+	player_hp_bar.max_value = _player_max_hp
 	enemy_hp_bar.max_value = _enemy_max_hp
 	_animate_hp_bar(player_hp_bar, _player_hp)
 	_animate_hp_bar(enemy_hp_bar, _enemy_hp)
-	_tint_hp_bar(player_hp_bar, float(_player_hp) / float(PLAYER_MAX_HP))
+	_tint_hp_bar(player_hp_bar, float(_player_hp) / float(maxi(_player_max_hp, 1)))
 	_tint_hp_bar(enemy_hp_bar, float(_enemy_hp) / float(maxi(_enemy_max_hp, 1)))
-	_pulse_hp_if_low(player_hp_bar, float(_player_hp) / float(PLAYER_MAX_HP))
+	_pulse_hp_if_low(player_hp_bar, float(_player_hp) / float(maxi(_player_max_hp, 1)))
 	rainbow_btn.disabled = _rainbows <= 0 or not _is_player_turn or _busy
 	rainbow_btn.text = "Armed" if _rainbow_pending else "Use (%d)" % _rainbows
 	_refresh_streak_dots()
 	# Active-turn glow on whoever is acting.
 	_set_active_avatar(player_avatar, SAGE_DARK, _is_player_turn and not _busy)
 	_set_active_avatar(enemy_avatar, HP_PINK_DARK, not _is_player_turn and _busy)
+	_refresh_status_labels()
+
+## Updates the per-combatant Frozen / Poison / Leeched status lines.
+func _refresh_status_labels() -> void:
+	if enemy_status_label != null:
+		var e := ""
+		if _enemy_frozen:
+			e = "Frozen"
+		if _enemy_poison > 0:
+			e += ("  •  " if e != "" else "") + "Poison x%d" % _enemy_poison
+		enemy_status_label.text = e
+		enemy_status_label.visible = e != ""
+	if player_status_label != null:
+		var p := ""
+		if _leech_turns > 0:
+			p = "Leeched x%d" % _leech_turns
+		player_status_label.text = p
+		player_status_label.visible = p != ""
 
 func _tint_hp_bar(bar: ProgressBar, ratio: float) -> void:
 	var fill: Color
@@ -907,10 +1276,10 @@ func _dim_board(dim_on: bool) -> void:
 			t.dim = dim_on
 
 func _publish_session(player_won: bool) -> void:
-	var e: Dictionary = ENEMIES[_enemy_idx % ENEMIES.size()]
+	GameState.wf_session["world_idx"] = _world_idx
 	GameState.wf_session["enemy_idx"] = _enemy_idx
-	GameState.wf_session["enemy_name"] = e.name
-	GameState.wf_session["enemy_max_hp"] = int(e.hp)
+	GameState.wf_session["enemy_name"] = _enemy.get("name", "")
+	GameState.wf_session["enemy_max_hp"] = int(_enemy.get("hp", _enemy_max_hp))
 	GameState.wf_session["enemy_hp_left"] = _enemy_hp
 	GameState.wf_session["player_hp_left"] = _player_hp
 	GameState.wf_session["topic"] = _topic
@@ -923,7 +1292,7 @@ func _publish_session(player_won: bool) -> void:
 	GameState.wf_session["player_won"] = player_won
 
 func _on_enemy_defeated() -> void:
-	_set_status("Defeated %s!" % ENEMIES[_enemy_idx % ENEMIES.size()].name)
+	_set_status("Defeated %s!" % _enemy.get("name", "the enemy"))
 	var bonus := GameState.add_xp("word_fight", 100)
 	_score_earned += bonus
 	_busy = true
@@ -950,6 +1319,15 @@ func _face_avatar_inward(av_panel: Control, mirror: bool) -> void:
 		if c is TextureRect:
 			(c as TextureRect).flip_h = mirror
 
+## Attacker lunges toward the opponent, then springs back — sells the swing.
+func _avatar_lunge(node: Control, toward_right: bool) -> void:
+	if node == null: return
+	var base := node.position
+	var toward := Vector2(26 if toward_right else -26, -6)
+	var tw := node.create_tween()
+	tw.tween_property(node, "position", base + toward, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "position", base, 0.26).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
 ## Lean an avatar away from the impact, then snap back. Subtler than full shake.
 func _avatar_lean(node: Control, mirror: bool) -> void:
 	if node == null: return
@@ -975,38 +1353,3 @@ func _animate_hp_bar(bar: ProgressBar, target: int) -> void:
 	if bar == null: return
 	var tw := bar.create_tween()
 	tw.tween_property(bar, "value", float(target), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-class _ChainOverlay extends Control:
-	var _tiles_chain: Array = []
-	var _wrap: Control
-	var _phase: float = 0.0
-	func _ready() -> void:
-		set_process(true)
-	func _process(delta: float) -> void:
-		_phase += delta * 2.0
-		if not _tiles_chain.is_empty():
-			queue_redraw()
-	func set_tiles(tiles: Array, wrap: Control) -> void:
-		_tiles_chain = tiles
-		_wrap = wrap
-		queue_redraw()
-	func _draw() -> void:
-		if _tiles_chain.size() < 2 or _wrap == null:
-			return
-		var points: PackedVector2Array = PackedVector2Array()
-		for t in _tiles_chain:
-			var ctrl := t as Control
-			if ctrl == null: continue
-			points.append(ctrl.global_position + ctrl.size * 0.5 - global_position)
-		# Glow underlay.
-		for i in points.size() - 1:
-			draw_line(points[i], points[i + 1], Color(1, 1, 1, 0.35), 10.0, true)
-		# Main line — pink/magenta with subtle pulse.
-		var pulse: float = 0.65 + 0.35 * (0.5 + 0.5 * sin(_phase))
-		var col := Color(1.0, 0.45, 0.75, pulse)
-		for i in points.size() - 1:
-			draw_line(points[i], points[i + 1], col, 5.0, true)
-		# Node dots at each junction.
-		for p in points:
-			draw_circle(p, 6, Color(1, 1, 1, 0.9))
-			draw_circle(p, 4, Color("#c81f8c"))

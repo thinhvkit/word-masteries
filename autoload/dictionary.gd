@@ -54,7 +54,77 @@ func _load_words() -> void:
 	print("Dictionary loaded: %d words" % _words.size())
 
 func is_valid(word: String) -> bool:
-	return _words.has(word.strip_edges().to_lower())
+	var w := word.strip_edges().to_lower()
+	if _words.has(w):
+		return true
+	return _morph_valid(w)
+
+## True if `word` is a standard inflected form of a base dictionary word.
+## The bundled list (macOS web2) is a 1934 headword list with no plurals,
+## tenses or adverbs, so we accept a word when stripping a common English
+## suffix (-s, -es, -ies, -ed, -ied, -ing, -ly, -ily, -er, -est, ...) yields
+## a valid base word.
+func _morph_valid(word: String) -> bool:
+	var n := word.length()
+	# Plurals / 3rd-person: -ies -> y, -es, -s
+	if n >= 5 and word.ends_with("ies"):
+		if _words.has(word.substr(0, n - 3) + "y"):   # parties -> party
+			return true
+	if n >= 4 and word.ends_with("es"):
+		if _words.has(word.substr(0, n - 2)):         # boxes -> box, goes -> go
+			return true
+	if n >= 4 and word.ends_with("s") and not word.ends_with("ss"):
+		if _words.has(word.substr(0, n - 1)):         # cats -> cat, likes -> like
+			return true
+	# Past tense: -ied -> y, -ed
+	if n >= 5 and word.ends_with("ied"):
+		if _words.has(word.substr(0, n - 3) + "y"):   # tried -> try
+			return true
+	if n >= 5 and word.ends_with("ed"):
+		var stem := word.substr(0, n - 2)
+		# walked -> walk ; liked -> like (restore e) ; stopped -> stop (un-double)
+		if _words.has(stem) or _words.has(stem + "e") or _undoubled_valid(stem):
+			return true
+	# Continuous: -ing
+	if n >= 6 and word.ends_with("ing"):
+		var stem := word.substr(0, n - 3)
+		# walking -> walk ; liking -> like ; running -> run
+		if _words.has(stem) or _words.has(stem + "e") or _undoubled_valid(stem):
+			return true
+	# Adverbs: -ily -> y, -ly
+	if n >= 5 and word.ends_with("ily"):
+		if _words.has(word.substr(0, n - 3) + "y"):   # easily -> easy
+			return true
+	if n >= 5 and word.ends_with("ly"):
+		if _words.has(word.substr(0, n - 2)):         # slowly -> slow
+			return true
+	# Comparatives / superlatives: -iest -> y, -est, -ier -> y, -er
+	if n >= 6 and word.ends_with("iest"):
+		if _words.has(word.substr(0, n - 4) + "y"):   # happiest -> happy
+			return true
+	if n >= 6 and word.ends_with("est"):
+		var stem := word.substr(0, n - 3)
+		if _words.has(stem) or _words.has(stem + "e") or _undoubled_valid(stem):
+			return true
+	if n >= 5 and word.ends_with("ier"):
+		if _words.has(word.substr(0, n - 3) + "y"):   # happier -> happy
+			return true
+	if n >= 5 and word.ends_with("er"):
+		var stem := word.substr(0, n - 2)
+		if _words.has(stem) or _words.has(stem + "e") or _undoubled_valid(stem):
+			return true
+	return false
+
+## True if `stem` ends in a doubled consonant and dropping one yields a valid
+## word (stopp -> stop, runn -> run, bigg -> big).
+func _undoubled_valid(stem: String) -> bool:
+	var n := stem.length()
+	if n < 3:
+		return false
+	var last := stem[n - 1]
+	if last == stem[n - 2] and "aeiou".find(last) == -1:
+		return _words.has(stem.substr(0, n - 1))
+	return false
 
 func size() -> int:
 	return _words.size()

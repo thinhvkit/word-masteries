@@ -1,5 +1,5 @@
 extends RefCounted
-## Word Fight FX library — animated background, chain overlay, particle bursts,
+## Word Fight FX library — wooden backdrop, particle bursts, attack bolts,
 ## damage popups, shake, banners, and fireworks. All entry points are static
 ## so the main game script can call them as `Fx.X(parent, ...)`.
 
@@ -27,6 +27,12 @@ const RARE_INK    := Color("#5e0e3a")
 const SELECT_TOP    := Color("#ff7ad1")
 const SELECT_BOTTOM := Color("#c81f8c")
 const SELECT_INK    := Color("#ffffff")
+
+# Every normal (non-gem) tile shares this one warm-cream gradient, so the
+# saturated gem tiles are the only ones that read as special.
+const NORMAL_TILE_TOP    := Color("#fff7ec")
+const NORMAL_TILE_BOTTOM := Color("#ecdfca")
+const NORMAL_TILE_INK    := Color("#5a4840")
 
 const VOWELS := "AEIOU"
 const COMMON := "NRTLSDG"
@@ -86,10 +92,84 @@ static func score_popup(parent: Control, world_pos: Vector2, text: String, big: 
 	tw.chain().tween_callback(lbl.queue_free)
 
 static func damage_color_for(amount: int) -> Color:
-	if amount >= 120: return Color("#ff3838")   # crimson
-	if amount >= 80:  return Color("#ff7a1f")   # orange
-	if amount >= 50:  return Color("#ffd027")   # gold
+	if amount >= 650: return Color("#ff3838")   # crimson
+	if amount >= 350: return Color("#ff7a1f")   # orange
+	if amount >= 150: return Color("#ffd027")   # gold
 	return Color.WHITE
+
+## Sets `label.text` and shrinks its font size (down to `min_size`) so the text
+## fits `max_width` px on one line — keeps long words from overflowing the
+## screen. Pair with an autowrap mode as a safety net for extreme lengths.
+static func fit_label_font(label: Label, text: String, base_size: int, max_width: float, min_size: int = 13) -> void:
+	if label == null:
+		return
+	label.text = text
+	label.add_theme_font_size_override("font_size", base_size)
+	if text.is_empty() or max_width <= 0.0:
+		return
+	var font := label.get_theme_font("font")
+	if font == null:
+		return
+	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, base_size).x
+	if w <= max_width:
+		return
+	var scaled: int = int(floor(float(base_size) * max_width / w))
+	label.add_theme_font_size_override("font_size", maxi(scaled, min_size))
+
+# ---- gem tiles ------------------------------------------------------------
+# Indices match WFTile.Gem: 0 NORMAL,1 FIRE,2 ICE,3 GOLD,4 POISON,5 DIAMOND,6 HEALING.
+
+## [top, bottom, ink] gradient for a gem fill. NORMAL returns [] (use letter tier).
+static func gem_gradient(gem_type: int) -> Array:
+	match gem_type:
+		1: return [Color("#ff9a6b"), Color("#ff5a3c"), Color("#5e1500")]   # fire
+		2: return [Color("#cbecff"), Color("#4db4ff"), Color("#06375e")]   # ice
+		3: return [Color("#ffe488"), Color("#ffc01f"), Color("#6e4a00")]   # gold
+		4: return [Color("#9fe88f"), Color("#3da94f"), Color("#123e12")]   # poison
+		5: return [Color("#bdf6f6"), Color("#2fd6d6"), Color("#064a4a")]   # diamond
+		6: return [Color("#e3c8ff"), Color("#a259f0"), Color("#2e0a55")]   # healing
+		_: return []
+
+## Bright accent (ring / glow / pip) for a gem.
+static func gem_accent(gem_type: int) -> Color:
+	match gem_type:
+		1: return Color("#ff3c1a")
+		2: return Color("#1f9fff")
+		3: return Color("#ffb300")
+		4: return Color("#2fc04c")
+		5: return Color("#18e6e6")
+		6: return Color("#b86bff")
+		_: return Color.WHITE
+
+## Translucent tint drawn over a tile carrying an enemy hazard.
+## Indices match WFTile.Hazard: 0 NONE,1 BURNING,2 LOCKED,3 STONE,4 POISONED.
+static func hazard_overlay(hazard_type: int) -> Color:
+	match hazard_type:
+		1: return Color(1.0, 0.35, 0.05, 0.42)    # burning
+		2: return Color(0.55, 0.72, 0.95, 0.5)    # locked / frozen
+		3: return Color(0.42, 0.42, 0.46, 0.92)   # stone (near-opaque)
+		4: return Color(0.30, 0.52, 0.16, 0.55)   # poisoned
+		_: return Color(0, 0, 0, 0)
+
+## Floating green "+N" popup for healing.
+static func heal_popup(parent: Control, world_pos: Vector2, amount: int) -> void:
+	var lbl := Label.new()
+	lbl.text = "+%d" % amount
+	lbl.add_theme_font_size_override("font_size", 26)
+	lbl.add_theme_color_override("font_color", Color("#54e07a"))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.65))
+	lbl.add_theme_constant_override("outline_size", 6)
+	lbl.position = world_pos
+	lbl.pivot_offset = Vector2(20, 12)
+	lbl.z_index = 100
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(lbl)
+	var tw := parent.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "position:y", world_pos.y - 52.0, 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "scale", Vector2(1.25, 1.25), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_property(lbl, "modulate:a", 0.0, 0.4)
+	tw.chain().tween_callback(lbl.queue_free)
 
 # ---- shake ----------------------------------------------------------------
 static func shake(node: Control, intensity: float = 6.0, duration: float = 0.35) -> void:
@@ -232,56 +312,179 @@ static func banner(parent: Control, text: String, bg: Color, fg: Color = Color.W
 	tw.chain().tween_property(b, "modulate:a", 0.0, 0.3)
 	tw.chain().tween_callback(b.queue_free)
 
-# ---------- shared animated vibrant backdrop ----------
-## Reusable backdrop: six-color cycling gradient bands with rounded corners.
-## Each screen instantiates one via `Fx.AnimatedBoardBG.new()` and (optionally)
-## tunes `radius`, `speed`, or `band_alpha` before `add_child`.
-class AnimatedBoardBG extends Control:
+# ---- attack: projectile bolt, impact burst, slash, hit flash --------------
+## A glowing comet that flies from `from_pos` to `to_pos`, leaving a muzzle
+## spark behind and calling `on_impact` the instant it lands.
+static func strike_bolt(parent: Control, from_pos: Vector2, to_pos: Vector2, color: Color, on_impact: Callable = Callable()) -> void:
+	if parent == null: return
+	sparkle_burst(parent, from_pos, color, 5)            # muzzle flash
+	var bolt := _StrikeBolt.new(color)
+	bolt.position = from_pos
+	bolt.rotation = (to_pos - from_pos).angle()
+	bolt.z_index = 120
+	parent.add_child(bolt)
+	var dur: float = clampf(from_pos.distance_to(to_pos) / 1500.0, 0.16, 0.36)
+	var finish := func() -> void:
+		if on_impact.is_valid():
+			on_impact.call()
+		if is_instance_valid(bolt):
+			bolt.queue_free()
+	var tw := parent.create_tween()
+	tw.tween_property(bolt, "position", to_pos, dur).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_callback(finish)
+
+class _StrikeBolt extends Control:
+	var col: Color
+	func _init(c: Color) -> void:
+		col = c
+		size = Vector2(2, 2)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		# Tapering tail trailing behind the head (head at origin, tail toward -x).
+		for i in 7:
+			var f: float = float(i) / 6.0
+			draw_circle(Vector2(-f * 34.0, 0), lerp(10.0, 1.0, f),
+				Color(col.r, col.g, col.b, (1.0 - f) * 0.55))
+		draw_circle(Vector2.ZERO, 10.0, Color(col.r, col.g, col.b, 0.85))
+		draw_circle(Vector2.ZERO, 6.0, Color(1, 1, 1, 0.95))
+
+## Expanding shockwave ring + white core flash + radial spark debris.
+static func impact_burst(parent: Control, world_pos: Vector2, color: Color, big: bool = false) -> void:
+	if parent == null: return
+	var ring := _ImpactRing.new(color, big)
+	ring.position = world_pos
+	ring.z_index = 110
+	parent.add_child(ring)
+	var step := func(v: float) -> void:
+		if is_instance_valid(ring):
+			ring.progress = v
+			ring.queue_redraw()
+	var tw := parent.create_tween()
+	tw.tween_method(step, 0.0, 1.0, 0.42 if big else 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(ring.queue_free)
+	sparkle_burst(parent, world_pos, color, 11 if big else 7)
+
+class _ImpactRing extends Control:
+	var col: Color
+	var big: bool
+	var progress: float = 0.0
+	func _init(c: Color, b: bool) -> void:
+		col = c
+		big = b
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var max_r: float = 70.0 if big else 46.0
+		var r: float = lerp(8.0, max_r, progress)
+		var a: float = 1.0 - progress
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 44,
+			Color(col.r, col.g, col.b, a * 0.9), lerp(8.0, 1.0, progress), true)
+		if progress < 0.45:
+			var fa: float = 1.0 - progress / 0.45
+			draw_circle(Vector2.ZERO, lerp(6.0, 26.0, progress), Color(1, 1, 1, fa * 0.75))
+
+## Two bright diagonal slash streaks — punctuates a heavy hit.
+static func slash(parent: Control, world_pos: Vector2, color: Color) -> void:
+	if parent == null: return
+	var mark := _SlashMark.new(color)
+	mark.position = world_pos
+	mark.z_index = 130
+	parent.add_child(mark)
+	var step := func(v: float) -> void:
+		if is_instance_valid(mark):
+			mark.progress = v
+			mark.queue_redraw()
+	var tw := parent.create_tween()
+	tw.tween_method(step, 0.0, 1.0, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(mark.queue_free)
+
+class _SlashMark extends Control:
+	var col: Color
+	var ang: float
+	var progress: float = 0.0
+	func _init(c: Color) -> void:
+		col = c
+		ang = -0.7 + randf_range(-0.25, 0.25)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var dir := Vector2(cos(ang), sin(ang))
+		var nrm := Vector2(-dir.y, dir.x)
+		var grow: float = clampf(progress * 2.2, 0.0, 1.0)
+		var a: float = clampf((1.0 - progress) * 1.5, 0.0, 1.0)
+		var half: float = 42.0 * grow
+		for k in 2:
+			var off := nrm * (float(k) * 16.0 - 8.0)
+			var p0 := off - dir * half
+			var p1 := off + dir * half
+			draw_line(p0, p1, Color(col.r, col.g, col.b, a), lerp(8.0, 2.0, progress), true)
+			draw_line(p0, p1, Color(1, 1, 1, a * 0.85), lerp(3.5, 1.0, progress), true)
+
+## Brief overbright flash on a node — a combatant reacting to a hit.
+static func hit_flash(node: CanvasItem, tint: Color = Color(1.9, 1.25, 1.25)) -> void:
+	if node == null: return
+	var tw := node.create_tween()
+	tw.tween_property(node, "modulate", tint, 0.06)
+	tw.tween_property(node, "modulate", Color(1, 1, 1, 1), 0.24)
+
+# ---------- shared wooden backdrop ----------
+## Reusable static backdrop: stacked wooden planks with grain + rounded
+## corners. Each screen instantiates one via `Fx.BoardBG.new()` and
+## (optionally) tunes `radius` before `add_child`.
+class BoardBG extends Control:
 	var radius: float = 18.0
-	var speed: float = 0.3
-	var band_alpha: float = 0.5
-	var bands_count: int = 22
-	var _t: float = 0.0
-	const _PALETTE := [
-		Color("#3aa8ff"), Color("#7a55ff"), Color("#ff3aa8"),
-		Color("#ff7a1f"), Color("#ffd027"), Color("#3ad6a8"),
+
+	const _BASE := Color("#4a2f1a")
+	const _GROOVE := Color("#33200f")
+	const _PLANK_H := 56.0
+	const _PLANK_TONES := [
+		Color("#9c6b43"), Color("#8a5b38"), Color("#a87c4f"),
+		Color("#915f3c"), Color("#b0855a"), Color("#82542f"),
 	]
 
 	func _ready() -> void:
-		set_process(true)
 		clip_contents = true
-
-	func _process(delta: float) -> void:
-		_t += delta * speed
-		queue_redraw()
 
 	func _draw() -> void:
 		var r: float = minf(radius, minf(size.x, size.y) * 0.5)
-		# Dark base with rounded corners.
-		_round_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.12, 1), r)
-		# Adaptive sub-band count: ~4px per strip means the staircase step at the
-		# corner curve is small enough that the dark gap reads as the corner curve.
-		var step_px: float = 4.0
-		var n: int = maxi(bands_count, int(ceil(size.y / step_px)))
-		for i in n:
-			var t0: float = float(i) / float(n)
-			var t1: float = float(i + 1) / float(n)
-			var phase: float = fmod(t0 + _t, 1.0) * _PALETTE.size()
-			var idx: int = int(phase) % _PALETTE.size()
-			var nxt: int = (idx + 1) % _PALETTE.size()
-			var f: float = phase - floor(phase)
-			var col: Color = _PALETTE[idx].lerp(_PALETTE[nxt], f)
-			col.a = band_alpha
-			var y0: float = size.y * t0
-			var y1: float = size.y * t1
-			# Use the widest (most-inset) chord across the strip so it stays
-			# fully inside the rounded silhouette — no visible disc seams.
-			var chord_top: float = _corner_chord_at_y(y0, r, size.y)
-			var chord_bot: float = _corner_chord_at_y(y1, r, size.y)
-			var chord: float = maxf(chord_top, chord_bot)
-			if chord >= size.x * 0.5:
-				continue
-			draw_rect(Rect2(Vector2(chord, y0), Vector2(size.x - chord * 2, y1 - y0)), col)
+		# Rounded dark base — shows through at the corner curves.
+		_round_rect(Rect2(Vector2.ZERO, size), _BASE, r)
+		# Stacked horizontal wooden planks.
+		var plank_count: int = maxi(2, int(round(size.y / _PLANK_H)))
+		var ph: float = size.y / float(plank_count)
+		for i in plank_count:
+			var y0: float = ph * i
+			var y1: float = ph * (i + 1)
+			var tone: Color = _PLANK_TONES[i % _PLANK_TONES.size()]
+			# Soft vertical shading inside the plank (lit top → shaded bottom).
+			var sub := 6
+			for s in sub:
+				var st0: float = y0 + (y1 - y0) * float(s) / float(sub)
+				var st1: float = y0 + (y1 - y0) * float(s + 1) / float(sub)
+				var f: float = float(s) / float(sub - 1)
+				var shade: Color = tone.lightened(0.10).lerp(tone.darkened(0.16), f)
+				var chord: float = maxf(_corner_chord_at_y(st0, r, size.y), _corner_chord_at_y(st1, r, size.y))
+				if chord < size.x * 0.5:
+					draw_rect(Rect2(Vector2(chord, st0), Vector2(size.x - chord * 2, st1 - st0)), shade)
+			# Wood grain lines running along the plank.
+			_draw_grain(y0, y1, i)
+			# Dark groove between planks.
+			if i < plank_count - 1:
+				var gch: float = _corner_chord_at_y(y1, r, size.y)
+				if gch < size.x * 0.5:
+					draw_rect(Rect2(Vector2(gch, y1 - 1.5), Vector2(size.x - gch * 2, 3.0)), _GROOVE)
+		# Warm inner edge highlight.
+		_round_rect_outline(Rect2(Vector2.ZERO, size), Color(1, 0.9, 0.72, 0.18), r, 2.0)
+
+	func _draw_grain(y0: float, y1: float, seed_i: int) -> void:
+		var sd: float = float(seed_i) * 1.73
+		for k in 3:
+			var gy: float = y0 + (y1 - y0) * (0.28 + 0.22 * k)
+			var pts := PackedVector2Array()
+			var segs := 16
+			for sgi in segs + 1:
+				var fx: float = float(sgi) / float(segs)
+				var wob: float = sin(fx * 8.5 + sd + k * 2.1) * 2.2
+				pts.append(Vector2(fx * size.x, gy + wob))
+			draw_polyline(pts, Color(0, 0, 0, 0.10), 1.5, true)
 
 	# Horizontal inset (in pixels) imposed by the rounded silhouette at vertical
 	# offset `y` from the top of the bg. Returns 0 outside the corner zones.
@@ -303,3 +506,16 @@ class AnimatedBoardBG extends Control:
 		draw_circle(rect.position + Vector2(rect.size.x - rr, rr), rr, color)
 		draw_circle(rect.position + Vector2(rr, rect.size.y - rr), rr, color)
 		draw_circle(rect.position + Vector2(rect.size.x - rr, rect.size.y - rr), rr, color)
+
+	func _round_rect_outline(rect: Rect2, color: Color, r: float, width: float) -> void:
+		var rr: float = minf(r, minf(rect.size.x, rect.size.y) * 0.5)
+		var p := rect.position
+		var sz := rect.size
+		draw_line(p + Vector2(rr, 0), p + Vector2(sz.x - rr, 0), color, width)
+		draw_line(p + Vector2(rr, sz.y), p + Vector2(sz.x - rr, sz.y), color, width)
+		draw_line(p + Vector2(0, rr), p + Vector2(0, sz.y - rr), color, width)
+		draw_line(p + Vector2(sz.x, rr), p + Vector2(sz.x, sz.y - rr), color, width)
+		draw_arc(p + Vector2(rr, rr), rr, PI, PI * 1.5, 16, color, width)
+		draw_arc(p + Vector2(sz.x - rr, rr), rr, -PI * 0.5, 0, 16, color, width)
+		draw_arc(p + Vector2(rr, sz.y - rr), rr, PI * 0.5, PI, 16, color, width)
+		draw_arc(p + Vector2(sz.x - rr, sz.y - rr), rr, 0, PI * 0.5, 16, color, width)

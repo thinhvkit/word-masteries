@@ -45,7 +45,7 @@ var _replays_lbl: Label
 
 func _ready() -> void:
 	_pick_word()
-	var bg := Fx.AnimatedBoardBG.new()
+	var bg := Fx.BoardBG.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)

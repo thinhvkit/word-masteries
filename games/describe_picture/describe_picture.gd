@@ -52,7 +52,7 @@ var _body: VBoxContainer
 
 func _ready() -> void:
 	_scene_data = SCENES[randi() % SCENES.size()]
-	var bg := Fx.AnimatedBoardBG.new()
+	var bg := Fx.BoardBG.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)

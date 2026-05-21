@@ -96,7 +96,7 @@ func _build_form() -> void:
 	var hero := Control.new()
 	hero.custom_minimum_size = Vector2(0, 160)
 	hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var hero_bg := Fx.AnimatedBoardBG.new()
+	var hero_bg := Fx.BoardBG.new()
 	hero_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hero_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.add_child(hero_bg)
@@ -322,7 +322,7 @@ func _build_results(typed_set: Dictionary, correct: int, earned: int) -> void:
 	var hero := Control.new()
 	hero.custom_minimum_size = Vector2(0, 160)
 	hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var hero_bg := Fx.AnimatedBoardBG.new()
+	var hero_bg := Fx.BoardBG.new()
 	hero_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hero_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.add_child(hero_bg)

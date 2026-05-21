@@ -1,13 +1,29 @@
 extends Control
-## Word Fight — Victory results screen. Reads GameState.wf_session.
+## Word Fight — Victory results screen. Reads GameState.wf_session, awards gold
+## and Lex XP, and records world progress.
 
 const UI := preload("res://scripts/results_ui.gd")
+const Items := preload("res://games/word_fight/items.gd")
+const Worlds := preload("res://games/word_fight/worlds.gd")
 
-const ENEMY_COUNT := 4  # mirrors word_fight.gd ENEMIES.size()
+var _gold_earned: int = 0
+var _levels_gained: int = 0
 
 func _ready() -> void:
 	var s: Dictionary = GameState.wf_session
+	_award_rewards(s)
 	_build_ui(s)
+
+## Grants gold + Lex XP for the cleared enemy and records map progress. Runs once.
+func _award_rewards(s: Dictionary) -> void:
+	var world_idx := int(s.get("world_idx", 0))
+	var enemy_idx := int(s.get("enemy_idx", 0))
+	var tier := world_idx * Worlds.ENEMIES_PER_WORLD + enemy_idx
+	var gold_base := 40 + tier * 25
+	_gold_earned = int(round(gold_base * Items.mult_effect("gold_mult")))
+	GameState.add_gold(_gold_earned)
+	_levels_gained = GameState.add_lex_xp(140 + tier * 55)
+	GameState.mark_enemy_cleared(world_idx, enemy_idx)
 
 func _build_ui(s: Dictionary) -> void:
 	UI.bg_layer(self, Palette.BG)
@@ -26,12 +42,15 @@ func _build_ui(s: Dictionary) -> void:
 	body.add_child(_center_svg("res://assets/icons/party.svg", 96))
 	body.add_child(UI.center_label("Victory!", 32, Palette.SAGE_DARK))
 	body.add_child(UI.center_label("You defeated %s" % str(s.get("enemy_name", "")), 18, Palette.TEXT_SECONDARY))
+	if _levels_gained > 0:
+		body.add_child(UI.center_label("Lex reached level %d!" % GameState.lex_level, 18, Palette.GOLD))
 
 	# Stat boxes
 	var stats := HBoxContainer.new()
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
-	stats.add_theme_constant_override("separation", 32)
+	stats.add_theme_constant_override("separation", 28)
 	stats.add_child(UI.stat_box("Damage dealt", str(int(s.get("damage_dealt", 0))), Palette.SAGE_DARK))
+	stats.add_child(UI.stat_box("Gold earned", "+%d" % _gold_earned, Palette.GOLD))
 	stats.add_child(UI.stat_box("Words used", str(int(s.get("words_used", 0))), Palette.PINK_DARK))
 	body.add_child(stats)
 
@@ -45,13 +64,14 @@ func _build_ui(s: Dictionary) -> void:
 	sbox.add_child(UI.kv_row("Longest word", longest_display))
 	sbox.add_child(UI.kv_row("Topic matches", "%d words" % int(s.get("topic_matches", 0))))
 	sbox.add_child(UI.kv_row("Rainbows used", str(int(s.get("rainbows_used", 0)))))
-	sbox.add_child(UI.kv_row("Score earned", "+%d pts" % int(s.get("score_earned", 0)), true))
+	sbox.add_child(UI.kv_row("Lex level", str(GameState.lex_level)))
+	sbox.add_child(UI.kv_row("Gold balance", str(GameState.gold), true))
 	card.add_child(sbox)
 	body.add_child(card)
 
 	# Buttons
-	var cur_idx: int = int(s.get("enemy_idx", 0))
-	var is_last: bool = (cur_idx + 1) >= ENEMY_COUNT
+	var enemy_idx: int = int(s.get("enemy_idx", 0))
+	var is_last: bool = (enemy_idx + 1) >= Worlds.ENEMIES_PER_WORLD
 	var next_label: String = "Back to Map" if is_last else "Next Battle"
 	var next_btn := UI.primary_btn(next_label)
 	if not is_last and ResourceLoader.exists("res://assets/icons/arrow_right.svg"):
@@ -72,12 +92,12 @@ func _on_next(is_last: bool) -> void:
 	if is_last:
 		_on_back()
 		return
-	# Advance enemy and route through intro for next battle.
+	# Advance enemy and route through intro for the next battle.
 	GameState.wf_session["enemy_idx"] = int(GameState.wf_session.get("enemy_idx", 0)) + 1
 	get_tree().change_scene_to_file("res://games/word_fight/intro.tscn")
 
 func _on_back() -> void:
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	get_tree().change_scene_to_file("res://games/word_fight/world_map.tscn")
 
 func _center_svg(path: String, size_px: int) -> Control:
 	# Centered TextureRect at native aspect, used in place of an emoji mascot.
