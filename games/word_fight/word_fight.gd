@@ -1,6 +1,6 @@
 extends Control
-## Word Fight — 5×5 shared board, alternating turns, dictionary words deal damage.
-## Implements GDD §2 (Core Board, Rainbow Booster, scoring).
+## Word Fight — landscape duel on a 4×4 gem board. Alternating turns; dictionary
+## words deal damage. 2.5D combatants flank the board on a battle stage.
 
 const Tile := preload("res://games/word_fight/tile_node.gd")
 const Topics := preload("res://games/word_fight/topics.gd")
@@ -8,10 +8,10 @@ const Fx := preload("res://games/word_fight/fx.gd")
 const Worlds := preload("res://games/word_fight/worlds.gd")
 const Items := preload("res://games/word_fight/items.gd")
 
-const ROWS := 5
-const COLS := 5
+const ROWS := 4
+const COLS := 4
 const MIN_WORD_LEN := 3
-const MIN_VOWELS := 4
+const MIN_VOWELS := 5
 const RAINBOW_STREAK_REQUIRED := 3   # 3× consecutive 5+ letter words → rainbow
 const RAINBOW_MAX := 3                # max stored rainbow charges
 const DMG_LEN_MULT := 8               # base damage = word_length² × this (quadratic scaling)
@@ -82,10 +82,11 @@ var clear_btn: Button
 var rainbow_btn: Button
 var back_btn: Button
 var streak_dots_row: HBoxContainer
-var board_bg: Control                  # animated gradient backdrop behind the 5x5
+var board_bg: Control                  # wooden backdrop behind the 4×4 grid
 var board_wrap: Control
-var player_avatar: Control
-var enemy_avatar: Control
+var arena_bg: Control                  # full-screen 2.5D arena backdrop
+var player_avatar                      # Fx.Combatant — 2.5D player character
+var enemy_avatar                       # Fx.Combatant — 2.5D enemy character
 var submit_glow: Panel
 var rainbow_sweep: ColorRect
 
@@ -132,175 +133,232 @@ func _ready() -> void:
 	if not seeded_topic.is_empty():
 		_topic = seeded_topic
 	_build_ui()
-	back_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
+	back_btn.pressed.connect(func():
+		Audio.play("click")
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	submit_btn.pressed.connect(_submit_player_word)
-	clear_btn.pressed.connect(_clear_chain)
+	clear_btn.pressed.connect(func():
+		Audio.play("click")
+		_clear_chain())
 	rainbow_btn.pressed.connect(_use_rainbow)
+	Audio.start_music()
 	_start_battle(_enemy_idx)
 
 # ---------------- UI construction (wf_game_a layout) ----------------
 
 func _build_ui() -> void:
-	Chrome.bg_layer(self)
+	# Full-screen 2.5D battle-arena backdrop.
+	arena_bg = Fx.ArenaBG.new()
+	arena_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	arena_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(arena_bg)
 	back_btn = Chrome.header(self, "Word Fight", "%s ×2" % _topic.capitalize(), Color("#fff1c4"), Color("#b48218"))
-	# Keep `topic_label` as a Label so existing _start_battle can update its text.
-	# We'll wire the in-header chip to mirror it below.
+	# topic_label kept (hidden) so _start_battle can write to it harmlessly.
 	topic_label = Label.new()
 	topic_label.visible = false
 	add_child(topic_label)
 
-	# Body VBox.
-	var body := VBoxContainer.new()
-	body.anchor_right = 1.0
-	body.anchor_bottom = 1.0
-	body.offset_left = 12
-	body.offset_top = Chrome.HEADER_H + 8
-	body.offset_right = -12
-	body.offset_bottom = -8
-	body.add_theme_constant_override("separation", 8)
-	add_child(body)
+	# Root: combat row (expands) above the action bar.
+	var root := VBoxContainer.new()
+	root.anchor_right = 1.0
+	root.anchor_bottom = 1.0
+	root.offset_left = 10
+	root.offset_top = Chrome.HEADER_H + 6
+	root.offset_right = -10
+	root.offset_bottom = -8
+	root.add_theme_constant_override("separation", 6)
+	add_child(root)
 
-	# Player HP row — avatar on the LEFT, bar fills to the right (player facing right).
-	player_hp_bar = _hp_bar(SAGE, false)
-	player_hp_label = Label.new()
-	var player_svg := "res://assets/avatars/%s.svg" % GameState.player_avatar
-	var p_row := _hp_row(SAGE, player_svg, player_hp_bar, player_hp_label, false)
-	player_avatar = p_row.get_child(0) as Control
-	body.add_child(p_row)
-	player_hp_label.text = "1000"
-	player_status_label = _make_status_label(Color("#c0392b"), HORIZONTAL_ALIGNMENT_LEFT)
-	body.add_child(player_status_label)
+	# Combat row: player column | center board | enemy column.
+	var combat := HBoxContainer.new()
+	combat.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	combat.add_theme_constant_override("separation", 10)
+	combat.add_child(_combatant_column(true))
+	combat.add_child(_center_column())
+	combat.add_child(_combatant_column(false))
+	root.add_child(combat)
 
-	# Enemy HP row — MIRRORED: avatar on the RIGHT, bar fills to the left (enemy facing left).
-	enemy_hp_bar = _hp_bar(HP_PINK, true)
-	enemy_hp_label = Label.new()
-	var enemy_svg := _enemy_avatar_path()
-	var e_row := _hp_row(HP_PINK, enemy_svg, enemy_hp_bar, enemy_hp_label, true)
-	# Avatar is now the LAST child when mirrored.
-	enemy_avatar = e_row.get_child(e_row.get_child_count() - 1) as Control
-	enemy_name_label = Label.new()
-	enemy_name_label.visible = false
-	add_child(enemy_name_label)
-	body.add_child(e_row)
-	enemy_status_label = _make_status_label(Color("#1f9fff"), HORIZONTAL_ALIGNMENT_RIGHT)
-	body.add_child(enemy_status_label)
-	# Kick off idle breathing animations on both avatars.
-	_start_idle_bob(player_avatar)
-	_start_idle_bob(enemy_avatar)
-	# Mirror enemy SVG horizontally so it visually faces the player.
-	_face_avatar_inward(enemy_avatar, true)
-	_face_avatar_inward(player_avatar, false)
+	root.add_child(_actions_bar())
 
-	# "Your word: —" pink pill.
-	var word_pill := PanelContainer.new()
-	var wp_sb := StyleBoxFlat.new()
-	wp_sb.bg_color = PINK_PILL_BG
-	wp_sb.set_corner_radius_all(22)
-	wp_sb.set_border_width_all(2)
-	wp_sb.border_color = PINK_PILL_BORDER
-	wp_sb.content_margin_left = 20
-	wp_sb.content_margin_right = 20
-	wp_sb.content_margin_top = 10
-	wp_sb.content_margin_bottom = 10
-	wp_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.2)
-	wp_sb.shadow_size = 6
-	wp_sb.shadow_offset = Vector2i(0, 2)
-	word_pill.add_theme_stylebox_override("panel", wp_sb)
-	# Vertical stack: caption / word / damage — the word gets the full pill width
-	# so long chains never push the layout past the screen edge.
-	var word_col := VBoxContainer.new()
-	word_col.add_theme_constant_override("separation", 2)
-	var prefix := Label.new()
-	prefix.text = "Your word"
-	prefix.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prefix.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	prefix.add_theme_font_size_override("font_size", 13)
-	word_col.add_child(prefix)
-	current_word_label = Label.new()
-	current_word_label.text = "—"
-	current_word_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	current_word_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	current_word_label.add_theme_color_override("font_color", HP_PINK_DARK)
-	current_word_label.add_theme_font_size_override("font_size", 24)
-	word_col.add_child(current_word_label)
-	dmg_preview_label = Label.new()
-	dmg_preview_label.text = ""
-	dmg_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	dmg_preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dmg_preview_label.add_theme_color_override("font_color", SAGE_DARK)
-	dmg_preview_label.add_theme_font_size_override("font_size", 16)
-	word_col.add_child(dmg_preview_label)
-	word_pill.add_child(word_col)
-	body.add_child(word_pill)
+	# Rainbow full-screen iridescent sweep overlay (hidden by default).
+	rainbow_sweep = ColorRect.new()
+	rainbow_sweep.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rainbow_sweep.color = Color(1, 1, 1, 0)
+	rainbow_sweep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rainbow_sweep.z_index = 80
+	add_child(rainbow_sweep)
 
-	# Board — animated gradient backdrop fills all leftover vertical space; the
-	# letter grid is scaled + centered inside it so it fits any screen size.
+# ---- landscape layout helpers ----
+
+## One side of the duel: a 2.5D combatant above an HP bar + status line.
+## The player column also carries the rainbow streak dots.
+func _combatant_column(is_player: bool) -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.custom_minimum_size = Vector2(206, 0)
+	col.add_theme_constant_override("separation", 3)
+	var accent: Color = SAGE if is_player else HP_PINK
+	var accent_dark: Color = SAGE_DARK if is_player else HP_PINK_DARK
+
+	var combatant := Fx.Combatant.new()
+	combatant.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	combatant.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	combatant.custom_minimum_size = Vector2(0, 104)
+	var svg: String = ("res://assets/avatars/%s.svg" % GameState.player_avatar) if is_player else _enemy_avatar_path()
+	combatant.setup(svg, 1.0 if is_player else -1.0, accent)
+	col.add_child(combatant)
+
+	var name_lbl := Label.new()
+	name_lbl.text = (GameState.player_name if GameState.player_name != "" else "You") if is_player else String(_enemy.get("name", "Enemy"))
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.clip_text = true
+	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.add_theme_color_override("font_color", accent_dark)
+	col.add_child(name_lbl)
+
+	var bar := _hp_bar(accent)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var value_lbl := Label.new()
+	value_lbl.text = "1000"
+	value_lbl.add_theme_font_size_override("font_size", 15)
+	value_lbl.add_theme_color_override("font_color", Chrome.TEXT)
+	value_lbl.custom_minimum_size = Vector2(46, 0)
+	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var hp_row := HBoxContainer.new()
+	hp_row.add_theme_constant_override("separation", 6)
+	hp_row.add_child(bar)
+	hp_row.add_child(value_lbl)
+	col.add_child(hp_row)
+
+	var status := _make_status_label(
+		Color("#c0392b") if is_player else Color("#1f9fff"), HORIZONTAL_ALIGNMENT_CENTER)
+	col.add_child(status)
+
+	if is_player:
+		player_avatar = combatant
+		player_hp_bar = bar
+		player_hp_label = value_lbl
+		player_status_label = status
+		var dots_holder := CenterContainer.new()
+		streak_dots_row = UI.streak_dots(0, RAINBOW_STREAK_REQUIRED, 8)
+		dots_holder.add_child(streak_dots_row)
+		col.add_child(dots_holder)
+	else:
+		enemy_avatar = combatant
+		enemy_hp_bar = bar
+		enemy_hp_label = value_lbl
+		enemy_status_label = status
+		enemy_name_label = name_lbl
+	return col
+
+## Center column: status line, the word pill, and the 4×4 gem board.
+func _center_column() -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 5)
+
+	status_label = Label.new()
+	status_label.text = ""
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.clip_text = true
+	status_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	status_label.add_theme_font_size_override("font_size", 15)
+	col.add_child(status_label)
+
+	col.add_child(_word_pill())
+
+	# Board panel — wooden backdrop; the grid is scaled to fit inside it.
 	var board_panel := Control.new()
 	board_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	# A modest floor only — the grid scales down to whatever space remains.
-	board_panel.custom_minimum_size = Vector2(200, 200)
+	board_panel.custom_minimum_size = Vector2(220, 150)
 	board_bg = Fx.BoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	board_panel.add_child(board_bg)
 	grid = GridContainer.new()
 	grid.columns = COLS
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
 	board_panel.add_child(grid)
-	# board_wrap is the coordinate space for board FX.
 	board_wrap = board_panel
 	board_panel.resized.connect(_fit_board)
-	body.add_child(board_panel)
+	col.add_child(board_panel)
+	return col
 
-	# Boosters row: 4 streak dots + "streak" label on left, rainbow chip on right.
-	var boosters := HBoxContainer.new()
-	boosters.add_theme_constant_override("separation", 6)
-	streak_dots_row = UI.streak_dots(0, RAINBOW_STREAK_REQUIRED, 8)
-	boosters.add_child(streak_dots_row)
-	var streak_lbl := Label.new()
-	streak_lbl.text = "streak"
-	streak_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	streak_lbl.add_theme_font_size_override("font_size", 15)
-	boosters.add_child(streak_lbl)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	boosters.add_child(spacer)
+## The pink "Your word / damage" pill shown above the board.
+func _word_pill() -> PanelContainer:
+	var word_pill := PanelContainer.new()
+	var wp_sb := StyleBoxFlat.new()
+	wp_sb.bg_color = PINK_PILL_BG
+	wp_sb.set_corner_radius_all(18)
+	wp_sb.set_border_width_all(2)
+	wp_sb.border_color = PINK_PILL_BORDER
+	wp_sb.content_margin_left = 18
+	wp_sb.content_margin_right = 18
+	wp_sb.content_margin_top = 5
+	wp_sb.content_margin_bottom = 6
+	wp_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.2)
+	wp_sb.shadow_size = 5
+	wp_sb.shadow_offset = Vector2i(0, 2)
+	word_pill.add_theme_stylebox_override("panel", wp_sb)
+	var word_col := VBoxContainer.new()
+	word_col.add_theme_constant_override("separation", 0)
+	current_word_label = Label.new()
+	current_word_label.text = "—"
+	current_word_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	current_word_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	current_word_label.add_theme_color_override("font_color", HP_PINK_DARK)
+	current_word_label.add_theme_font_size_override("font_size", 22)
+	word_col.add_child(current_word_label)
+	dmg_preview_label = Label.new()
+	dmg_preview_label.text = ""
+	dmg_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dmg_preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dmg_preview_label.add_theme_color_override("font_color", SAGE_DARK)
+	dmg_preview_label.add_theme_font_size_override("font_size", 14)
+	word_col.add_child(dmg_preview_label)
+	word_pill.add_child(word_col)
+	return word_pill
+
+## Bottom action bar: Clear, the rainbow charge button, and Submit.
+func _actions_bar() -> HBoxContainer:
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+
+	clear_btn = Chrome.pill_button("Clear", Chrome.SURFACE, Chrome.TEXT)
+	clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(clear_btn)
+
 	rainbow_btn = Button.new()
 	rainbow_btn.text = "Use (0)"
 	rainbow_btn.icon = RAINBOW_ICON
-	rainbow_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rainbow_btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	rainbow_btn.expand_icon = false
 	rainbow_btn.add_theme_constant_override("icon_max_width", 22)
-	rainbow_btn.add_theme_constant_override("h_separation", 4)
+	rainbow_btn.add_theme_constant_override("h_separation", 6)
 	rainbow_btn.focus_mode = Control.FOCUS_NONE
 	rainbow_btn.add_theme_font_size_override("font_size", 15)
 	rainbow_btn.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	var rb_sb := StyleBoxFlat.new()
 	rb_sb.bg_color = Color("#f1ebe1")
 	rb_sb.set_corner_radius_all(99)
-	rb_sb.content_margin_left = 12
-	rb_sb.content_margin_right = 12
-	rb_sb.content_margin_top = 6
-	rb_sb.content_margin_bottom = 6
+	rb_sb.content_margin_left = 16
+	rb_sb.content_margin_right = 16
+	rb_sb.content_margin_top = 11
+	rb_sb.content_margin_bottom = 11
 	rainbow_btn.add_theme_stylebox_override("normal", rb_sb)
 	rainbow_btn.add_theme_stylebox_override("hover", rb_sb)
 	rainbow_btn.add_theme_stylebox_override("pressed", rb_sb)
 	rainbow_btn.add_theme_stylebox_override("disabled", rb_sb)
 	rainbow_btn.add_theme_stylebox_override("focus", rb_sb)
-	boosters.add_child(rainbow_btn)
-	body.add_child(boosters)
+	actions.add_child(rainbow_btn)
 
-	# Actions row — Clear (white pill) + Submit (pink pill) wrapped in a glow panel.
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 12)
-	clear_btn = Chrome.pill_button("Clear", Chrome.SURFACE, Chrome.TEXT)
-	clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	actions.add_child(clear_btn)
 	var submit_wrap := Control.new()
 	submit_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	submit_wrap.custom_minimum_size = Vector2(0, 56)
+	submit_wrap.custom_minimum_size = Vector2(0, 52)
 	submit_glow = Panel.new()
 	submit_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	submit_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -315,24 +373,7 @@ func _build_ui() -> void:
 	submit_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
 	submit_wrap.add_child(submit_btn)
 	actions.add_child(submit_wrap)
-	body.add_child(actions)
-
-	# Rainbow full-screen iridescent sweep overlay (hidden by default).
-	rainbow_sweep = ColorRect.new()
-	rainbow_sweep.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rainbow_sweep.color = Color(1, 1, 1, 0)
-	rainbow_sweep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rainbow_sweep.z_index = 80
-	add_child(rainbow_sweep)
-
-	# Status label.
-	status_label = Label.new()
-	status_label.text = ""
-	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	status_label.add_theme_font_size_override("font_size", 18)
-	body.add_child(status_label)
+	return actions
 
 # ---- HP row helpers ----
 func _hp_bar(fill: Color, _mirrored: bool = false) -> ProgressBar:
@@ -353,54 +394,6 @@ func _hp_bar(fill: Color, _mirrored: bool = false) -> ProgressBar:
 	bar.add_theme_stylebox_override("background", bg)
 	bar.add_theme_stylebox_override("fill", fg)
 	return bar
-
-func _hp_row(circle: Color, svg_path: String, bar: ProgressBar, value_lbl: Label, mirrored: bool = false) -> HBoxContainer:
-	# Order: [avatar][bar][value_lbl]   for player (mirrored=false)
-	#        [value_lbl][bar][avatar]   for enemy  (mirrored=true)  → duel feel.
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	var av := Panel.new()
-	av.custom_minimum_size = Vector2(56, 56)
-	av.pivot_offset = Vector2(28, 28)
-	var av_sb := StyleBoxFlat.new()
-	av_sb.bg_color = circle
-	av_sb.set_corner_radius_all(28)
-	av_sb.set_border_width_all(3)
-	av_sb.border_color = Color(1, 1, 1, 0.75)
-	av_sb.shadow_color = Color(circle.r, circle.g, circle.b, 0.55)
-	av_sb.shadow_size = 10
-	av_sb.shadow_offset = Vector2i(0, 3)
-	av.add_theme_stylebox_override("panel", av_sb)
-	if ResourceLoader.exists(svg_path):
-		var icon := TextureRect.new()
-		icon.texture = load(svg_path)
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-		icon.offset_left = 5
-		icon.offset_top = 5
-		icon.offset_right = -5
-		icon.offset_bottom = -5
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		av.add_child(icon)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	value_lbl.text = "0"
-	value_lbl.add_theme_color_override("font_color", Chrome.TEXT)
-	value_lbl.add_theme_font_size_override("font_size", 18)
-	value_lbl.custom_minimum_size = Vector2(40, 0)
-	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if mirrored:
-		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		row.add_child(value_lbl)
-		row.add_child(bar)
-		row.add_child(av)
-	else:
-		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(av)
-		row.add_child(bar)
-		row.add_child(value_lbl)
-	return row
 
 # Small per-combatant status line (Frozen / Poison / Leeched).
 func _make_status_label(color: Color, align: int) -> Label:
@@ -563,6 +556,7 @@ func _on_tile_pressed(tile: Tile) -> void:
 	if tile.is_blocked():
 		var why := "That tile is locked!" if tile.hazard == Tile.Hazard.LOCKED else "That tile is solid stone!"
 		_flash_status(why, Color(0.6, 0.45, 0.25))
+		Audio.play("invalid")
 		return
 	if tile.selected_order >= 0:
 		# Tapping a selected tile: pop chain back to (and including) this tile.
@@ -570,9 +564,14 @@ func _on_tile_pressed(tile: Tile) -> void:
 		while _selected.size() > idx:
 			var popped: Tile = _selected.pop_back()
 			popped.selected_order = -1
+		Audio.play("deselect")
 	else:
 		tile.selected_order = _selected.size()
 		_selected.append(tile)
+		# Pitch climbs with chain length; gem tiles get a sparkle on top.
+		Audio.play("select", 0.04, lerpf(0.85, 1.45, clampf(_selected.size() / 9.0, 0.0, 1.0)))
+		if tile.gem != Tile.Gem.NORMAL:
+			Audio.play("gem", 0.05)
 	_refresh_current_word()
 
 func _clear_chain() -> void:
@@ -696,6 +695,7 @@ func _submit_player_word() -> void:
 		var healed := mini(heal_count * HEAL_PER_GEM, _player_max_hp - _player_hp)
 		_player_hp += healed
 		if healed > 0 and player_avatar != null and is_inside_tree():
+			Audio.play("heal")
 			Fx.heal_popup(self, _avatar_center(player_avatar) + Vector2(20, -10), healed)
 	# Poisoned hazard tiles bite back when used in a word.
 	if poisoned_hazard > 0 and not Items.has_effect("poison_immune"):
@@ -732,8 +732,9 @@ func _submit_player_word() -> void:
 
 	# ----- HIT FX -----
 	var big_hit := dmg >= 350
+	Audio.play("big_hit" if big_hit else "hit", 0.08)
 	if enemy_avatar != null and player_avatar != null and is_inside_tree():
-		_avatar_lunge(player_avatar, true)            # player swings toward the enemy
+		player_avatar.attack()                        # player swings toward the enemy
 		# Confetti from the selected tiles, trailing the word energy toward the enemy.
 		if board_wrap != null:
 			var froms: Array = []
@@ -749,9 +750,7 @@ func _submit_player_word() -> void:
 			var ec := _avatar_center(enemy_avatar)
 			Fx.impact_burst(self, ec, dcolor, big_hit)
 			Fx.damage_popup(self, ec + Vector2(20, -10), dmg, big_hit, dcolor)
-			Fx.hit_flash(enemy_avatar)
-			Fx.shake(enemy_avatar, 11.0 if big_hit else 7.0, 0.38)
-			_avatar_lean(enemy_avatar, true)
+			enemy_avatar.take_hit(big_hit)
 			if big_hit:
 				Fx.slash(self, ec, Color.WHITE)
 				Fx.shake(self, 5.0, 0.28)
@@ -860,16 +859,15 @@ func _enemy_turn() -> void:
 	# ----- ENEMY HIT FX on the player -----
 	var e_big := dmg >= 350
 	if player_avatar != null and enemy_avatar != null and is_inside_tree():
-		_avatar_lunge(enemy_avatar, false)            # enemy swings toward the player
+		enemy_avatar.attack()                         # enemy swings toward the player
 		var dcolor := Fx.damage_color_for(dmg)
 		var on_hit := func() -> void:
 			if not is_inside_tree() or player_avatar == null: return
 			var pc := _avatar_center(player_avatar)
+			Audio.play("enemy_hit", 0.07)
 			Fx.impact_burst(self, pc, dcolor, e_big)
 			Fx.damage_popup(self, pc + Vector2(20, -10), dmg, e_big, dcolor)
-			Fx.hit_flash(player_avatar)
-			Fx.shake(player_avatar, 11.0 if e_big else 7.0, 0.38)
-			_avatar_lean(player_avatar, false)
+			player_avatar.take_hit(e_big)
 			if e_big:
 				Fx.slash(self, pc, Color("#ff5a6e"))
 				Fx.shake(self, 5.0, 0.28)
@@ -902,6 +900,8 @@ func _end_enemy_turn() -> void:
 ## Plays the defeat sting and routes to the defeat screen.
 func _defeat() -> void:
 	_set_status("You were defeated!")
+	Audio.stop_music()
+	Audio.play("defeat")
 	_busy = true
 	_is_player_turn = false
 	_dim_board(false)
@@ -909,9 +909,10 @@ func _defeat() -> void:
 	_publish_session(false)
 	get_tree().change_scene_to_file("res://games/word_fight/defeat.tscn")
 
-## Center of an avatar panel in this Control's local space.
-func _avatar_center(node: Control) -> Vector2:
-	return node.global_position + node.size * 0.5 - global_position
+## Body anchor of a 2.5D combatant in this Control's local space — FX aim here.
+func _avatar_center(node) -> Vector2:
+	var anchor: Vector2 = node.call("body_global")
+	return anchor - global_position
 
 ## Applies damage to the player through armor mitigation. Returns the amount dealt.
 func _damage_player(raw: int) -> int:
@@ -932,6 +933,7 @@ func _maybe_enemy_ability(skill: float) -> void:
 
 func _run_enemy_ability(ability: String) -> void:
 	var ename: String = _enemy.get("name", "Enemy")
+	Audio.play("hazard")
 	match ability:
 		"scramble":
 			_set_status("%s scrambles your letters!" % ename)
@@ -1141,8 +1143,10 @@ func _refresh_hud() -> void:
 	rainbow_btn.text = "Armed" if _rainbow_pending else "Use (%d)" % _rainbows
 	_refresh_streak_dots()
 	# Active-turn glow on whoever is acting.
-	_set_active_avatar(player_avatar, SAGE_DARK, _is_player_turn and not _busy)
-	_set_active_avatar(enemy_avatar, HP_PINK_DARK, not _is_player_turn and _busy)
+	if player_avatar != null:
+		player_avatar.set_active(_is_player_turn and not _busy)
+	if enemy_avatar != null:
+		enemy_avatar.set_active(not _is_player_turn and _busy)
 	_refresh_status_labels()
 
 ## Updates the per-combatant Frozen / Poison / Leeched status lines.
@@ -1217,6 +1221,7 @@ func _flash_status(s: String, color: Color) -> void:
 	tw.tween_property(status_label, "theme_override_colors/font_color", _STATUS_BASE_COLOR, 0.9)
 
 func _flash_invalid(s: String) -> void:
+	Audio.play("invalid")
 	_flash_status(s, Color(0.85, 0.15, 0.15))
 	# Big, unmissable feedback in the Current Word label.
 	var prev_text := current_word_label.text
@@ -1248,6 +1253,7 @@ func _use_rainbow() -> void:
 	if _rainbows <= 0 or _rainbow_pending: return
 	_rainbows -= 1
 	_rainbow_pending = true
+	Audio.play("rainbow")
 	_flash_status("Rainbow armed — next word deals ×%d damage" % RAINBOW_DAMAGE_MULT, Color(0.9, 0.55, 0.95))
 	# Iridescent screen sweep + tile rainbow shimmer until consumed.
 	if rainbow_sweep != null:
@@ -1296,57 +1302,13 @@ func _on_enemy_defeated() -> void:
 	var bonus := GameState.add_xp("word_fight", 100)
 	_score_earned += bonus
 	_busy = true
+	Audio.stop_music()
+	Audio.play("victory")
 	# Victory fireworks before scene change.
 	Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.45))
 	await get_tree().create_timer(0.9).timeout
 	_publish_session(true)
 	get_tree().change_scene_to_file("res://games/word_fight/victory.tscn")
-
-# ---------- duel-style avatar helpers ----------
-
-## Continuous "breathing" scale loop on an avatar so it never feels static.
-func _start_idle_bob(node: Control) -> void:
-	if node == null: return
-	node.pivot_offset = node.size * 0.5
-	var tw := node.create_tween().set_loops()
-	tw.tween_property(node, "scale", Vector2(1.04, 1.04), 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(node, "scale", Vector2(1.0, 1.0), 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-
-## Horizontally mirror the avatar SVG so the enemy faces the player.
-func _face_avatar_inward(av_panel: Control, mirror: bool) -> void:
-	if av_panel == null: return
-	for c in av_panel.get_children():
-		if c is TextureRect:
-			(c as TextureRect).flip_h = mirror
-
-## Attacker lunges toward the opponent, then springs back — sells the swing.
-func _avatar_lunge(node: Control, toward_right: bool) -> void:
-	if node == null: return
-	var base := node.position
-	var toward := Vector2(26 if toward_right else -26, -6)
-	var tw := node.create_tween()
-	tw.tween_property(node, "position", base + toward, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(node, "position", base, 0.26).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-## Lean an avatar away from the impact, then snap back. Subtler than full shake.
-func _avatar_lean(node: Control, mirror: bool) -> void:
-	if node == null: return
-	var base := node.position
-	var away := Vector2(-12 if not mirror else 12, 0)
-	var tw := node.create_tween()
-	tw.tween_property(node, "position", base + away, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(node, "position", base, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-## Highlight whose turn it is by pulsing a colored border + shadow on their avatar.
-func _set_active_avatar(node: Control, accent: Color, on: bool) -> void:
-	if node == null: return
-	var sb := node.get_theme_stylebox("panel") as StyleBoxFlat
-	if sb == null: return
-	var fresh: StyleBoxFlat = sb.duplicate()
-	fresh.border_color = accent if on else Color(1, 1, 1, 0.75)
-	fresh.shadow_color = Color(accent.r, accent.g, accent.b, 0.85 if on else 0.55)
-	fresh.shadow_size = 16 if on else 10
-	node.add_theme_stylebox_override("panel", fresh)
 
 ## Smoothly tween an HP bar's value + tint instead of snapping.
 func _animate_hp_bar(bar: ProgressBar, target: int) -> void:

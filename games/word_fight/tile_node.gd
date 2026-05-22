@@ -15,7 +15,7 @@ const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 signal tile_pressed(tile: WFTile)
 signal tile_selected_fx(tile: WFTile, color: Color)
 
-const SIZE := 56.0
+const SIZE := 64.0
 const RADIUS := 12.0
 
 ## Beneficial special tiles. Order is referenced by Fx.gem_gradient/gem_accent.
@@ -160,68 +160,86 @@ func _animate_select(now: bool) -> void:
 	tw.tween_property(self, "scale", Vector2.ONE * (1.08 if now else 1.0), 0.14)
 
 func _draw() -> void:
-	var rect := Rect2(Vector2.ZERO, size)
+	var s := size.x
+	var cut := s * 0.27
 	var sel := selected_order >= 0
 	var is_gem := gem != Gem.NORMAL
 	var is_stone := hazard == Hazard.STONE
+	var outer := _octagon(Vector2.ZERO, s, cut)
 
-	# Soft shadow.
-	_round_rect(Rect2(Vector2(0, 4), size), Color(0.15, 0.10, 0.25, 0.22), RADIUS)
+	# Drop shadow — octagon offset down.
+	draw_colored_polygon(_octagon(Vector2(0, 5), s, cut), Color(0.12, 0.08, 0.22, 0.30))
 
-	# --- base gradient fill: select overrides gem overrides letter tier ---
+	# --- fill colors: select overrides gem overrides letter tier ---
 	var top: Color
 	var bot: Color
 	var ink: Color
 	if sel:
-		top = Fx.SELECT_TOP
-		bot = Fx.SELECT_BOTTOM
-		ink = Fx.SELECT_INK
+		top = Fx.SELECT_TOP; bot = Fx.SELECT_BOTTOM; ink = Fx.SELECT_INK
 	elif is_gem:
 		var gg := Fx.gem_gradient(gem)
 		top = gg[0]; bot = gg[1]; ink = gg[2]
 	else:
-		top = Fx.NORMAL_TILE_TOP
-		bot = Fx.NORMAL_TILE_BOTTOM
-		ink = Fx.NORMAL_TILE_INK
+		var lg := Fx.gradient_for_letter(letter)
+		top = lg[0]; bot = lg[1]; ink = lg[2]
 
-	# Vertical gradient fill (banded rows).
-	_round_rect_gradient(rect, top, bot, RADIUS)
+	# Outer bevel body.
+	draw_colored_polygon(outer, bot.darkened(0.34))
 
-	# Top sheen — light horizontal highlight.
-	var sheen_rect := Rect2(rect.position + Vector2(4, 4), Vector2(rect.size.x - 8, rect.size.y * 0.42))
-	_round_rect(sheen_rect, Color(1, 1, 1, 0.22), RADIUS - 4)
+	# Faceted bevel rim — 8 trapezoids lit by a top-left light source.
+	var bw := s * 0.135
+	var inner := _octagon(Vector2(bw, bw), s - bw * 2.0, cut - bw)
+	var light := Vector2(0.55, 0.83)
+	for i in 8:
+		var o0: Vector2 = outer[i]
+		var o1: Vector2 = outer[(i + 1) % 8]
+		var i1: Vector2 = inner[(i + 1) % 8]
+		var i0: Vector2 = inner[i]
+		var edge := o1 - o0
+		var nrm := Vector2(edge.y, -edge.x).normalized()
+		var f: float = 0.5 + 0.5 * nrm.dot(-light)
+		var facet := top.lerp(bot.darkened(0.2), 1.0 - f).lerp(Color.WHITE, f * 0.2)
+		draw_colored_polygon(PackedVector2Array([o0, o1, i1, i0]), facet)
+
+	# Inner table face — vertical gradient.
+	_fill_octagon_gradient(Vector2(bw, bw), s - bw * 2.0, cut - bw, top, bot)
+
+	# Sheen — soft white highlight across the upper table.
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(bw + 3, bw + 3), Vector2(s - bw - 3, bw + 3),
+		Vector2(s - bw - 9, s * 0.46), Vector2(bw + 9, s * 0.46)]),
+		Color(1, 1, 1, 0.20))
 
 	# --- enemy hazard tint over the fill ---
 	if hazard != Hazard.NONE:
-		_round_rect(rect, Fx.hazard_overlay(hazard), RADIUS)
+		draw_colored_polygon(outer, Fx.hazard_overlay(hazard))
 
-	# --- border ---
+	# --- border / glow ---
 	if sel:
-		_round_rect_outline(rect, Color("#7a0e4a"), RADIUS, 2.5)
-		# Glow ring just outside.
-		_round_rect_outline(rect.grow(2), Color(1.0, 0.5, 0.85, 0.55), RADIUS + 2, 2.0)
+		_draw_poly_outline(outer, Color("#7a0e4a"), 2.6)
+		_draw_poly_outline(_octagon(Vector2(-2.5, -2.5), s + 5.0, cut),
+			Color(1.0, 0.5, 0.85, 0.6), 2.2)
 	elif is_stone:
-		_round_rect_outline(rect, Color("#2b2b30"), RADIUS, 2.5)
+		_draw_poly_outline(outer, Color("#2b2b30"), 2.6)
 	elif hazard == Hazard.LOCKED:
-		_round_rect_outline(rect, Color("#3a5e88"), RADIUS, 2.5)
+		_draw_poly_outline(outer, Color("#3a5e88"), 2.6)
 	elif is_gem:
-		_round_rect_outline(rect, Fx.gem_accent(gem), RADIUS, 2.5)
+		_draw_poly_outline(outer, Fx.gem_accent(gem), 2.6)
 	else:
-		_round_rect_outline(rect, Color(0, 0, 0, 0.18), RADIUS, 1.5)
+		_draw_poly_outline(outer, Color(0, 0, 0, 0.22), 1.6)
 
 	# Rainbow ring (animated hue rotation around the outline).
 	if rainbow:
-		var bands := 6
-		for i in bands:
-			var inset: float = 2.0 + i * 1.2
-			var hue: float = fmod((float(i) / float(bands)) + _rainbow_phase * 0.15, 1.0)
-			var col := Color.from_hsv(hue, 0.85, 1.0, 0.9)
-			_round_rect_outline(rect.grow(-inset), col, maxf(RADIUS - inset, 2), 1.6)
+		for i in 6:
+			var inset: float = 1.0 + i * 1.3
+			var hue: float = fmod((float(i) / 6.0) + _rainbow_phase * 0.15, 1.0)
+			_draw_poly_outline(_octagon(Vector2(inset, inset), s - inset * 2.0, cut - inset),
+				Color.from_hsv(hue, 0.85, 1.0, 0.9), 1.6)
 
 	# --- letter (hidden under stone) ---
 	if not is_stone:
 		var f: Font = TILE_FONT
-		var fs := 28
+		var fs := int(s * 0.5)
 		var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 		var ascent := f.get_ascent(fs)
 		var descent := f.get_descent(fs)
@@ -452,34 +470,34 @@ func _round_rect(rect: Rect2, color: Color, radius: float) -> void:
 	draw_circle(rect.position + Vector2(r, rect.size.y - r), r, color)
 	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, color)
 
-func _round_rect_gradient(rect: Rect2, top: Color, bot: Color, radius: float) -> void:
-	# Approximate a vertical gradient using horizontal strips with rounded mask.
+# --------- octagon gem helpers ---------
+## Eight corner points of a beveled-square (octagon) gem outline.
+func _octagon(o: Vector2, s: float, cut: float) -> PackedVector2Array:
+	var c: float = clampf(cut, 0.0, s * 0.5)
+	return PackedVector2Array([
+		o + Vector2(c, 0), o + Vector2(s - c, 0),
+		o + Vector2(s, c), o + Vector2(s, s - c),
+		o + Vector2(s - c, s), o + Vector2(c, s),
+		o + Vector2(0, s - c), o + Vector2(0, c)])
+
+## Closed outline stroke through an octagon's points.
+func _draw_poly_outline(pts: PackedVector2Array, color: Color, width: float) -> void:
+	var n := pts.size()
+	for i in n:
+		draw_line(pts[i], pts[(i + 1) % n], color, width, true)
+
+## Vertical gradient fill clipped to an octagon, drawn as horizontal bands.
+func _fill_octagon_gradient(o: Vector2, s: float, cut: float, top: Color, bot: Color) -> void:
 	var bands := 14
-	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-	for i in bands:
-		var t0: float = float(i) / float(bands)
-		var t1: float = float(i + 1) / float(bands)
-		var c := top.lerp(bot, (t0 + t1) * 0.5)
-		var y0 := rect.position.y + rect.size.y * t0
-		var y1 := rect.position.y + rect.size.y * t1
-		# Inset horizontally near top/bottom rows to fake rounded corners.
-		var inset: float = 0.0
-		if y0 < rect.position.y + r:
-			inset = r - (y0 - rect.position.y)
-		elif y1 > rect.position.y + rect.size.y - r:
-			inset = r - ((rect.position.y + rect.size.y) - y1)
-		inset = clampf(inset, 0.0, r)
-		# Use a circle "chord" approx — shrink the strip width to match the rounded corner.
-		var chord: float = 0.0
-		if inset > 0:
-			chord = r - sqrt(maxf(r * r - (r - inset) * (r - inset), 0.0))
-		draw_rect(Rect2(Vector2(rect.position.x + chord, y0),
-			Vector2(rect.size.x - chord * 2, y1 - y0)), c)
-	# Re-stamp the rounded corners with the closest band color to smooth the silhouette.
-	draw_circle(rect.position + Vector2(r, r), r, top)
-	draw_circle(rect.position + Vector2(rect.size.x - r, r), r, top)
-	draw_circle(rect.position + Vector2(r, rect.size.y - r), r, bot)
-	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, bot)
+	for b in bands:
+		var t0: float = float(b) / float(bands)
+		var t1: float = float(b + 1) / float(bands)
+		var y0: float = s * t0
+		var y1: float = s * t1
+		var col := top.lerp(bot, (t0 + t1) * 0.5)
+		var inset: float = maxf(maxf(cut - y0, cut - (s - y1)), 0.0)
+		inset = minf(inset, s * 0.5)
+		draw_rect(Rect2(o + Vector2(inset, y0), Vector2(s - inset * 2.0, y1 - y0)), col)
 
 func _round_rect_outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
 	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)

@@ -519,3 +519,160 @@ class BoardBG extends Control:
 		draw_arc(p + Vector2(sz.x - rr, rr), rr, -PI * 0.5, 0, 16, color, width)
 		draw_arc(p + Vector2(rr, sz.y - rr), rr, PI * 0.5, PI, 16, color, width)
 		draw_arc(p + Vector2(sz.x - rr, sz.y - rr), rr, 0, PI * 0.5, 16, color, width)
+
+# ---------- 2.5D battle arena backdrop ----------
+## Full-screen landscape backdrop: graded sky, a glowing horizon, and a
+## perspective floor plane that grounds the two combatants in a 2.5D stage.
+class ArenaBG extends Control:
+	const _SKY_TOP := Color("#2c1f5e")
+	const _SKY_BOT := Color("#e09a6a")
+	const _FLOOR_TOP := Color("#7a4f9c")
+	const _FLOOR_BOT := Color("#1d1230")
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		var horizon: float = h * 0.5
+		# Sky gradient.
+		var bands := 22
+		for i in bands:
+			var y0: float = horizon * float(i) / bands
+			var y1: float = horizon * float(i + 1) / bands
+			draw_rect(Rect2(0, y0, w, y1 - y0), _SKY_TOP.lerp(_SKY_BOT, float(i) / bands))
+		# Distant sun glow at the horizon.
+		draw_circle(Vector2(w * 0.5, horizon), h * 0.26, Color(1, 0.86, 0.62, 0.18))
+		draw_circle(Vector2(w * 0.5, horizon), h * 0.15, Color(1, 0.92, 0.72, 0.30))
+		# Floor gradient.
+		var fb := 18
+		for i in fb:
+			var y0: float = horizon + (h - horizon) * float(i) / fb
+			var y1: float = horizon + (h - horizon) * float(i + 1) / fb
+			draw_rect(Rect2(0, y0, w, y1 - y0), _FLOOR_TOP.lerp(_FLOOR_BOT, float(i) / fb))
+		# Perspective floor lines converging on the vanishing point.
+		var vp := Vector2(w * 0.5, horizon)
+		for k in 13:
+			var fx: float = w * (float(k) / 12.0 - 0.5) * 2.4 + w * 0.5
+			draw_line(Vector2(fx, h), vp, Color(1, 1, 1, 0.07), 1.5, true)
+		for k in range(1, 7):
+			var t: float = float(k) / 6.0
+			var yy: float = horizon + (h - horizon) * t * t
+			draw_line(Vector2(0, yy), Vector2(w, yy), Color(1, 1, 1, 0.06), 1.5, true)
+		# Soft top + bottom vignette.
+		for i in 8:
+			var a: float = (1.0 - float(i) / 8.0) * 0.14
+			draw_rect(Rect2(0, i * 4, w, 4), Color(0, 0, 0, a))
+			draw_rect(Rect2(0, h - (i + 1) * 5, w, 5), Color(0, 0, 0, a))
+
+# ---------- 2.5D combatant ----------
+## A character standing on a lit 2.5D stage disc: graded platform, contact
+## shadow, idle breathing, and attack / hit reactions. Owns its own sprite.
+class Combatant extends Control:
+	var facing := 1.0                       # +1 faces right, -1 faces left
+	var accent := Color("#a7d99a")
+	var active := false
+
+	var _sprite: TextureRect
+	var _sprite_base := Vector2.ZERO
+	var _anim_offset := Vector2.ZERO        # tweened by attack/hit reactions
+	var _t := 0.0                           # idle clock
+	var _flash := 0.0                       # 0..1 hit overbright
+	var _hurt := 0.0                        # 0..1 recoil lean
+	var _glow := 0.0                        # active-turn pulse phase
+
+	## Builds the sprite. `svg_path` may be missing (draws stage only).
+	func setup(svg_path: String, face: float, accent_color: Color) -> void:
+		facing = face
+		accent = accent_color
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		clip_contents = false
+		if ResourceLoader.exists(svg_path):
+			_sprite = TextureRect.new()
+			_sprite.texture = load(svg_path)
+			_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			_sprite.flip_h = facing < 0.0
+			_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(_sprite)
+		resized.connect(_layout)
+		_t = randf() * TAU
+		set_process(true)
+		_layout()
+
+	func _layout() -> void:
+		if _sprite == null:
+			return
+		var sw: float = size.x * 0.86
+		var sh: float = size.y * 0.66
+		_sprite.size = Vector2(sw, sh)
+		_sprite_base = Vector2((size.x - sw) * 0.5, size.y * 0.06)
+		_sprite.pivot_offset = Vector2(sw * 0.5, sh)
+
+	func _process(delta: float) -> void:
+		_t += delta
+		if _flash > 0.0: _flash = maxf(0.0, _flash - delta * 4.0)
+		if _hurt > 0.0: _hurt = maxf(0.0, _hurt - delta * 3.0)
+		if active: _glow += delta * 3.2
+		if _sprite != null:
+			var bob: float = sin(_t * 1.9) * 3.0
+			_sprite.position = _sprite_base + Vector2(0, bob) + _anim_offset
+			var breathe: float = 1.0 + sin(_t * 1.9) * 0.025
+			_sprite.scale = Vector2(breathe, breathe)
+			_sprite.rotation = -facing * _hurt * 0.20
+			_sprite.modulate = Color(1, 1, 1, 1).lerp(Color(2.1, 1.35, 1.35, 1), _flash)
+		queue_redraw()
+
+	## Body anchor point in global space — FX aim here.
+	func body_global() -> Vector2:
+		return global_position + Vector2(size.x * 0.5, size.y * 0.42)
+
+	## Lunges toward the opponent, then springs back — sells a swing.
+	func attack() -> void:
+		var tw := create_tween()
+		tw.tween_property(self, "_anim_offset", Vector2(facing * 26.0, -8.0), 0.12) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(self, "_anim_offset", Vector2.ZERO, 0.28) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	## Reacts to an incoming hit — overbright flash, recoil lean, and a shake.
+	func take_hit(big: bool = false) -> void:
+		_flash = 1.0
+		_hurt = 1.0
+		var mag: float = 9.0 if big else 5.0
+		var tw := create_tween()
+		for i in 5:
+			var s: float = 1.0 - float(i) / 5.0
+			tw.tween_property(self, "_anim_offset",
+				Vector2(-facing * mag * s, randf_range(-mag, mag) * s * 0.5), 0.05)
+		tw.tween_property(self, "_anim_offset", Vector2.ZERO, 0.06)
+
+	func set_active(on: bool) -> void:
+		active = on
+		if not on:
+			_glow = 0.0
+
+	func _ellipse(c: Vector2, rx: float, ry: float, n: int) -> PackedVector2Array:
+		var pts := PackedVector2Array()
+		for i in n:
+			var a := TAU * float(i) / float(n)
+			pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
+		return pts
+
+	func _draw() -> void:
+		var cx: float = size.x * 0.5
+		var cy: float = size.y * 0.78
+		var rx: float = size.x * 0.44
+		var ry: float = size.x * 0.15
+		# Active-turn glow ring beneath the disc.
+		if active:
+			var g: float = 0.5 + 0.5 * sin(_glow)
+			draw_colored_polygon(_ellipse(Vector2(cx, cy), rx + 7.0 + g * 5.0, ry + 4.0 + g * 3.0, 30),
+				Color(accent.r, accent.g, accent.b, 0.20 + 0.20 * g))
+		# Stage disc — graded for depth.
+		draw_colored_polygon(_ellipse(Vector2(cx, cy + 4.0), rx, ry, 30), accent.darkened(0.5))
+		draw_colored_polygon(_ellipse(Vector2(cx, cy), rx, ry, 30), accent.darkened(0.15))
+		draw_colored_polygon(_ellipse(Vector2(cx, cy - 1.5), rx * 0.72, ry * 0.66, 26), accent.lightened(0.16))
+		# Contact shadow — shrinks as the idle bob lifts the character.
+		var bob: float = sin(_t * 1.9) * 3.0
+		var ss: float = 1.0 - bob * 0.045
+		draw_colored_polygon(_ellipse(Vector2(cx, cy - ry * 0.18), rx * 0.6 * ss, ry * 0.6 * ss, 24),
+			Color(0, 0, 0, 0.30))
