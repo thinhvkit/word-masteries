@@ -139,7 +139,7 @@ func _ready() -> void:
 	_build_ui()
 	back_btn.pressed.connect(func():
 		Audio.play("click")
-		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
+		_set_orientation_portrait()
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	submit_btn.pressed.connect(_submit_player_word)
 	clear_btn.pressed.connect(func():
@@ -147,7 +147,7 @@ func _ready() -> void:
 		_clear_chain())
 	rainbow_btn.pressed.connect(_use_rainbow)
 	Audio.start_music()
-	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
+	_set_orientation_landscape()
 	_start_battle(_enemy_idx)
 
 # ---------------- UI construction (wf_game_a layout) ----------------
@@ -369,6 +369,7 @@ func _center_column() -> VBoxContainer:
 	board_bg = Fx.BoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	board_bg.set_world(_world_idx)
 	board_panel.add_child(board_bg)
 	grid = GridContainer.new()
 	grid.columns = COLS
@@ -1049,7 +1050,7 @@ func _defeat() -> void:
 	_dim_board(false)
 	await get_tree().create_timer(0.8).timeout
 	_publish_session(false)
-	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
+	_set_orientation_portrait()
 	get_tree().change_scene_to_file("res://games/word_fight/defeat.tscn")
 
 ## Body anchor of a 2.5D combatant in this Control's local space — FX aim here.
@@ -1541,7 +1542,7 @@ func _on_enemy_defeated() -> void:
 	Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.45))
 	await get_tree().create_timer(0.9).timeout
 	_publish_session(true)
-	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
+	_set_orientation_portrait()
 	get_tree().change_scene_to_file("res://games/word_fight/victory.tscn")
 
 ## Smoothly tween an HP bar's value + tint instead of snapping.
@@ -1549,3 +1550,13 @@ func _animate_hp_bar(bar: ProgressBar, target: int) -> void:
 	if bar == null: return
 	var tw := bar.create_tween()
 	tw.tween_property(bar, "value", float(target), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+static func _set_orientation_landscape() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("try{screen.orientation.lock('landscape')}catch(e){}")
+
+static func _set_orientation_portrait() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("try{screen.orientation.unlock()}catch(e){}")

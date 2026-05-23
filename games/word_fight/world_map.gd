@@ -25,9 +25,8 @@ func _build() -> void:
 
 	root.add_child(_top_bar())
 
-	var scroll := ScrollContainer.new()
+	var scroll := Chrome.scroll_container()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL

@@ -4,6 +4,8 @@ extends RefCounted
 ## All factories return ready-to-add Control nodes styled in the sketchy
 ## handwritten aesthetic: paper-white bg, 2px black borders, Caveat font.
 
+const _Chrome := preload("res://scripts/screen_chrome.gd")
+
 # ---- color palette ----
 const BG          := Color("#FAF9F6")
 const PAPER       := Color("#FFFFFF")
@@ -99,9 +101,8 @@ class Phone extends Control:
 		header_holder.custom_minimum_size = Vector2(0, 0)
 		header_holder.visible = false
 		inner.add_child(header_holder)
-		var scroll := ScrollContainer.new()
+		var scroll := _Chrome.scroll_container()
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		inner.add_child(scroll)
 		content_box = VBoxContainer.new()
 		content_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL

@@ -73,13 +73,12 @@ func _ready() -> void:
 	var back := Chrome.header(self, "Word Type", "word_type", VIBRANT_GOLD, VIBRANT_GOLD_DARK)
 	back.pressed.connect(_back)
 
-	var scroll := ScrollContainer.new()
+	var scroll := Chrome.scroll_container()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
 	scroll.offset_top = Chrome.HEADER_H
 	scroll.offset_left = 16
 	scroll.offset_right = -16
 	scroll.offset_bottom = -16
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
 
 	_body = VBoxContainer.new()

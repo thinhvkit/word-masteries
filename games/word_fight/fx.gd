@@ -432,68 +432,74 @@ static func hit_flash(node: CanvasItem, tint: Color = Color(1.9, 1.25, 1.25)) ->
 class BoardBG extends Control:
 	var radius: float = 18.0
 
-	const _BASE := Color("#4a2f1a")
-	const _GROOVE := Color("#33200f")
-	const _PLANK_H := 56.0
-	const _PLANK_TONES := [
-		Color("#9c6b43"), Color("#8a5b38"), Color("#a87c4f"),
-		Color("#915f3c"), Color("#b0855a"), Color("#82542f"),
+	var glow_color := Color(0.4, 0.9, 0.5, 0.25)
+	var stone_light := Color("#2a2a30")
+	var stone_dark := Color("#18181e")
+	var crack_color := Color(0.3, 0.3, 0.35, 0.5)
+
+	const _GLOW_THEMES := [
+		{"glow": Color(0.4, 0.9, 0.5, 0.25), "light": Color("#2a2e2a"), "dark": Color("#181e18"), "crack": Color(0.3, 0.5, 0.35, 0.45)},
+		{"glow": Color(1.0, 0.85, 0.4, 0.3), "light": Color("#2e2a24"), "dark": Color("#1e1a14"), "crack": Color(0.6, 0.5, 0.3, 0.4)},
+		{"glow": Color(1.0, 0.6, 0.2, 0.3), "light": Color("#2e2620"), "dark": Color("#1e1610"), "crack": Color(0.6, 0.4, 0.2, 0.4)},
+		{"glow": Color(0.9, 0.2, 0.3, 0.3), "light": Color("#2e2228"), "dark": Color("#1e1218"), "crack": Color(0.6, 0.2, 0.25, 0.4)},
 	]
+
+	func set_world(world_idx: int) -> void:
+		var t: Dictionary = _GLOW_THEMES[clampi(world_idx, 0, _GLOW_THEMES.size() - 1)]
+		glow_color = t.glow
+		stone_light = t.light
+		stone_dark = t.dark
+		crack_color = t.crack
+		queue_redraw()
 
 	func _ready() -> void:
 		clip_contents = true
 
 	func _draw() -> void:
 		var r: float = minf(radius, minf(size.x, size.y) * 0.5)
-		# Rounded dark base — shows through at the corner curves.
-		_round_rect(Rect2(Vector2.ZERO, size), _BASE, r)
-		# Stacked horizontal wooden planks.
-		var plank_count: int = maxi(2, int(round(size.y / _PLANK_H)))
-		var ph: float = size.y / float(plank_count)
-		for i in plank_count:
-			var y0: float = ph * i
-			var y1: float = ph * (i + 1)
-			var tone: Color = _PLANK_TONES[i % _PLANK_TONES.size()]
-			# Soft vertical shading inside the plank (lit top → shaded bottom).
-			var sub := 6
+		_round_rect(Rect2(Vector2.ZERO, size), stone_dark, r)
+		var slab_h: float = size.y / 4.0
+		for i in 4:
+			var y0: float = slab_h * i
+			var y1: float = slab_h * (i + 1)
+			var sub := 5
 			for s in sub:
 				var st0: float = y0 + (y1 - y0) * float(s) / float(sub)
 				var st1: float = y0 + (y1 - y0) * float(s + 1) / float(sub)
 				var f: float = float(s) / float(sub - 1)
-				var shade: Color = tone.lightened(0.10).lerp(tone.darkened(0.16), f)
+				var shade: Color = stone_light.lerp(stone_dark, f * 0.6 + 0.2)
 				var chord: float = maxf(_corner_chord_at_y(st0, r, size.y), _corner_chord_at_y(st1, r, size.y))
 				if chord < size.x * 0.5:
 					draw_rect(Rect2(Vector2(chord, st0), Vector2(size.x - chord * 2, st1 - st0)), shade)
-			# Wood grain lines running along the plank.
-			_draw_grain(y0, y1, i)
-			# Dark groove between planks.
-			if i < plank_count - 1:
+			_draw_cracks(y0, y1, i)
+			if i < 3:
 				var gch: float = _corner_chord_at_y(y1, r, size.y)
 				if gch < size.x * 0.5:
-					draw_rect(Rect2(Vector2(gch, y1 - 1.5), Vector2(size.x - gch * 2, 3.0)), _GROOVE)
-		# Warm inner edge highlight.
-		_round_rect_outline(Rect2(Vector2.ZERO, size), Color(1, 0.9, 0.72, 0.18), r, 2.0)
+					draw_rect(Rect2(Vector2(gch, y1 - 1.0), Vector2(size.x - gch * 2, 2.0)), Color(0, 0, 0, 0.4))
+		var cx: float = size.x * 0.5
+		var cy: float = size.y * 0.5
+		draw_circle(Vector2(cx, cy), minf(size.x, size.y) * 0.38, Color(glow_color.r, glow_color.g, glow_color.b, glow_color.a * 0.5))
+		draw_circle(Vector2(cx, cy), minf(size.x, size.y) * 0.22, Color(glow_color.r, glow_color.g, glow_color.b, glow_color.a * 0.3))
+		_round_rect_outline(Rect2(Vector2.ZERO, size), Color(glow_color.r, glow_color.g, glow_color.b, 0.35), r, 2.0)
 
-	func _draw_grain(y0: float, y1: float, seed_i: int) -> void:
-		var sd: float = float(seed_i) * 1.73
-		for k in 3:
-			var gy: float = y0 + (y1 - y0) * (0.28 + 0.22 * k)
+	func _draw_cracks(y0: float, y1: float, seed_i: int) -> void:
+		var sd: float = float(seed_i) * 2.37
+		for k in 4:
+			var gy: float = y0 + (y1 - y0) * (0.2 + 0.2 * k)
 			var pts := PackedVector2Array()
-			var segs := 16
+			var segs := 12
 			for sgi in segs + 1:
 				var fx: float = float(sgi) / float(segs)
-				var wob: float = sin(fx * 8.5 + sd + k * 2.1) * 2.2
+				var wob: float = sin(fx * 6.3 + sd + k * 1.7) * 1.8 + cos(fx * 11.0 + sd) * 0.9
 				pts.append(Vector2(fx * size.x, gy + wob))
-			draw_polyline(pts, Color(0, 0, 0, 0.10), 1.5, true)
+			draw_polyline(pts, crack_color, 1.0, true)
 
-	# Horizontal inset (in pixels) imposed by the rounded silhouette at vertical
-	# offset `y` from the top of the bg. Returns 0 outside the corner zones.
 	func _corner_chord_at_y(y: float, r: float, h: float) -> float:
 		var d: float = -1.0
 		if y < r:
-			d = r - y                  # depth into the top corner curve
+			d = r - y
 		elif y > h - r:
-			d = r - (h - y)            # depth into the bottom corner curve
+			d = r - (h - y)
 		if d < 0.0:
 			return 0.0
 		return r - sqrt(maxf(r * r - d * d, 0.0))

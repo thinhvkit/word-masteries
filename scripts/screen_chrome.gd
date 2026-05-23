@@ -140,3 +140,16 @@ static func pill_button(text: String, fill: Color, fg: Color = Color.WHITE, icon
 	b.add_theme_stylebox_override("focus", sb)
 	b.add_theme_stylebox_override("disabled", disabled)
 	return b
+
+static func scroll_container() -> ScrollContainer:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var empty := StyleBoxEmpty.new()
+	sc.add_theme_stylebox_override("panel", empty)
+	sc.get_v_scroll_bar().add_theme_stylebox_override("scroll", StyleBoxEmpty.new())
+	sc.get_v_scroll_bar().add_theme_stylebox_override("scroll_highlight", StyleBoxEmpty.new())
+	sc.get_v_scroll_bar().add_theme_stylebox_override("scroll_pressed", StyleBoxEmpty.new())
+	sc.get_v_scroll_bar().add_theme_stylebox_override("grabber", StyleBoxEmpty.new())
+	sc.get_v_scroll_bar().add_theme_stylebox_override("grabber_highlight", StyleBoxEmpty.new())
+	sc.get_v_scroll_bar().add_theme_stylebox_override("grabber_pressed", StyleBoxEmpty.new())
+	return sc

@@ -2,6 +2,7 @@ extends Control
 ## Word Match — Results screen. Reads GameState.wm_session.
 
 const UI := preload("res://scripts/results_ui.gd")
+const Chrome := preload("res://scripts/screen_chrome.gd")
 
 func _ready() -> void:
 	_build_ui(GameState.wm_session)
@@ -22,14 +23,13 @@ func _build_ui(s: Dictionary) -> void:
 	back_btn.pressed.connect(_on_back)
 	add_child(back_btn)
 
-	var scroll := ScrollContainer.new()
+	var scroll := Chrome.scroll_container()
 	scroll.anchor_right = 1.0
 	scroll.anchor_bottom = 1.0
 	scroll.offset_left = 16
 	scroll.offset_top = 56
 	scroll.offset_right = -16
 	scroll.offset_bottom = -16
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
 
 	var body := VBoxContainer.new()
