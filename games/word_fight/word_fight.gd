@@ -89,8 +89,12 @@ var player_avatar                      # Fx.Combatant — 2.5D player character
 var enemy_avatar                       # Fx.Combatant — 2.5D enemy character
 var submit_glow: Panel
 var rainbow_sweep: ColorRect
+var enemy_action_chip: PanelContainer
+var enemy_action_label: Label
+var enemy_word_toast: PanelContainer
+var enemy_word_toast_label: Label
 
-const RAINBOW_DAMAGE_MULT := 2
+const RAINBOW_LABEL := "Auto"
 
 var _tiles: Array = []                 # row-major Array of Tile (size 25), nullable
 var _selected: Array = []              # ordered Array of Tile in player's current chain
@@ -108,7 +112,7 @@ var _rainbows: int = 0
 var _used_words: Dictionary = {}       # word(lower) -> true, per-enemy
 var _is_player_turn: bool = true
 var _busy: bool = false                # animations/AI
-var _rainbow_pending: bool = false     # next submitted word gets RAINBOW_DAMAGE_MULT
+var _rainbow_auto_busy: bool = false
 
 # Combatant status effects.
 var _enemy_frozen: bool = false        # skips its next turn (Ice gem)
@@ -135,6 +139,7 @@ func _ready() -> void:
 	_build_ui()
 	back_btn.pressed.connect(func():
 		Audio.play("click")
+		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	submit_btn.pressed.connect(_submit_player_word)
 	clear_btn.pressed.connect(func():
@@ -142,6 +147,7 @@ func _ready() -> void:
 		_clear_chain())
 	rainbow_btn.pressed.connect(_use_rainbow)
 	Audio.start_music()
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
 	_start_battle(_enemy_idx)
 
 # ---------------- UI construction (wf_game_a layout) ----------------
@@ -151,8 +157,27 @@ func _build_ui() -> void:
 	arena_bg = Fx.ArenaBG.new()
 	arena_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	arena_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	arena_bg.set_world(_world_idx)
 	add_child(arena_bg)
 	back_btn = Chrome.header(self, "Word Fight", "%s ×2" % _topic.capitalize(), Color("#fff1c4"), Color("#b48218"))
+	var _hdr_row := back_btn.get_parent() as HBoxContainer
+	enemy_action_chip = PanelContainer.new()
+	var ea_sb := StyleBoxFlat.new()
+	ea_sb.bg_color = Color("#fde0e7")
+	ea_sb.set_corner_radius_all(99)
+	ea_sb.content_margin_left = 12
+	ea_sb.content_margin_right = 12
+	ea_sb.content_margin_top = 4
+	ea_sb.content_margin_bottom = 4
+	enemy_action_chip.add_theme_stylebox_override("panel", ea_sb)
+	enemy_action_label = Label.new()
+	enemy_action_label.text = ""
+	enemy_action_label.add_theme_color_override("font_color", HP_PINK_DARK)
+	enemy_action_label.add_theme_font_size_override("font_size", 14)
+	enemy_action_chip.add_child(enemy_action_label)
+	enemy_action_chip.visible = false
+	_hdr_row.add_child(enemy_action_chip)
+	_hdr_row.move_child(enemy_action_chip, _hdr_row.get_child_count() - 2)
 	# topic_label kept (hidden) so _start_battle can write to it harmlessly.
 	topic_label = Label.new()
 	topic_label.visible = false
@@ -180,6 +205,31 @@ func _build_ui() -> void:
 
 	root.add_child(_actions_bar())
 
+	# Big centered word toast for enemy attacks (hidden by default).
+	enemy_word_toast = PanelContainer.new()
+	var ewt_sb := StyleBoxFlat.new()
+	ewt_sb.bg_color = Color(0.1, 0.07, 0.18, 0.85)
+	ewt_sb.set_corner_radius_all(20)
+	ewt_sb.shadow_color = Color(0, 0, 0, 0.4)
+	ewt_sb.shadow_size = 12
+	ewt_sb.content_margin_left = 28
+	ewt_sb.content_margin_right = 28
+	ewt_sb.content_margin_top = 12
+	ewt_sb.content_margin_bottom = 12
+	enemy_word_toast.add_theme_stylebox_override("panel", ewt_sb)
+	enemy_word_toast_label = Label.new()
+	enemy_word_toast_label.text = ""
+	enemy_word_toast_label.add_theme_font_size_override("font_size", 36)
+	enemy_word_toast_label.add_theme_color_override("font_color", Color.WHITE)
+	enemy_word_toast_label.add_theme_color_override("font_outline_color", Color(1.0, 0.3, 0.4, 0.6))
+	enemy_word_toast_label.add_theme_constant_override("outline_size", 4)
+	enemy_word_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	enemy_word_toast.add_child(enemy_word_toast_label)
+	enemy_word_toast.visible = false
+	enemy_word_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_word_toast.z_index = 100
+	add_child(enemy_word_toast)
+
 	# Rainbow full-screen iridescent sweep overlay (hidden by default).
 	rainbow_sweep = ColorRect.new()
 	rainbow_sweep.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -194,7 +244,7 @@ func _build_ui() -> void:
 ## The player column also carries the rainbow streak dots.
 func _combatant_column(is_player: bool) -> VBoxContainer:
 	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(206, 0)
+	col.custom_minimum_size = Vector2(140, 0)
 	col.add_theme_constant_override("separation", 3)
 	var accent: Color = SAGE if is_player else HP_PINK
 	var accent_dark: Color = SAGE_DARK if is_player else HP_PINK_DARK
@@ -323,57 +373,111 @@ func _word_pill() -> PanelContainer:
 	word_pill.add_child(word_col)
 	return word_pill
 
-## Bottom action bar: Clear, the rainbow charge button, and Submit.
+## Bottom action bar: rainbow charge button + Attack (epic dungeon style).
 func _actions_bar() -> HBoxContainer:
 	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 10)
-
-	clear_btn = Chrome.pill_button("Clear", Chrome.SURFACE, Chrome.TEXT)
-	clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	actions.add_child(clear_btn)
+	actions.add_theme_constant_override("separation", 8)
 
 	rainbow_btn = Button.new()
-	rainbow_btn.text = "Use (0)"
+	rainbow_btn.text = "%s (0)" % RAINBOW_LABEL
 	rainbow_btn.icon = RAINBOW_ICON
 	rainbow_btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	rainbow_btn.expand_icon = false
-	rainbow_btn.add_theme_constant_override("icon_max_width", 22)
+	rainbow_btn.add_theme_constant_override("icon_max_width", 20)
 	rainbow_btn.add_theme_constant_override("h_separation", 6)
 	rainbow_btn.focus_mode = Control.FOCUS_NONE
-	rainbow_btn.add_theme_font_size_override("font_size", 15)
-	rainbow_btn.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	rainbow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rainbow_btn.add_theme_font_size_override("font_size", 16)
+	rainbow_btn.add_theme_color_override("font_color", Color("#e0d4c6"))
+	rainbow_btn.add_theme_color_override("font_hover_color", Color("#f0e8da"))
+	rainbow_btn.add_theme_color_override("font_pressed_color", Color("#c0b4a6"))
+	rainbow_btn.add_theme_color_override("font_disabled_color", Color("#706460"))
 	var rb_sb := StyleBoxFlat.new()
-	rb_sb.bg_color = Color("#f1ebe1")
-	rb_sb.set_corner_radius_all(99)
+	rb_sb.bg_color = Color("#2a2030")
+	rb_sb.set_corner_radius_all(14)
+	rb_sb.set_border_width_all(2)
+	rb_sb.border_color = Color("#5a4a6a")
+	rb_sb.shadow_color = Color(0, 0, 0, 0.3)
+	rb_sb.shadow_size = 4
+	rb_sb.shadow_offset = Vector2i(0, 2)
 	rb_sb.content_margin_left = 16
 	rb_sb.content_margin_right = 16
-	rb_sb.content_margin_top = 11
-	rb_sb.content_margin_bottom = 11
+	rb_sb.content_margin_top = 12
+	rb_sb.content_margin_bottom = 12
+	var rb_press := rb_sb.duplicate() as StyleBoxFlat
+	rb_press.bg_color = Color("#1a1220")
+	rb_press.shadow_size = 1
+	var rb_dis := rb_sb.duplicate() as StyleBoxFlat
+	rb_dis.bg_color = Color("#1a1620")
+	rb_dis.border_color = Color("#3a3040")
 	rainbow_btn.add_theme_stylebox_override("normal", rb_sb)
 	rainbow_btn.add_theme_stylebox_override("hover", rb_sb)
-	rainbow_btn.add_theme_stylebox_override("pressed", rb_sb)
-	rainbow_btn.add_theme_stylebox_override("disabled", rb_sb)
+	rainbow_btn.add_theme_stylebox_override("pressed", rb_press)
+	rainbow_btn.add_theme_stylebox_override("disabled", rb_dis)
 	rainbow_btn.add_theme_stylebox_override("focus", rb_sb)
 	actions.add_child(rainbow_btn)
 
 	var submit_wrap := Control.new()
 	submit_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	submit_wrap.size_flags_stretch_ratio = 2.0
 	submit_wrap.custom_minimum_size = Vector2(0, 52)
 	submit_glow = Panel.new()
 	submit_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	submit_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var glow_sb := StyleBoxFlat.new()
-	glow_sb.bg_color = Color(1, 0.5, 0.7, 0.0)
-	glow_sb.set_corner_radius_all(32)
-	glow_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.0)
-	glow_sb.shadow_size = 18
+	glow_sb.bg_color = Color(1, 0.3, 0.4, 0.0)
+	glow_sb.set_corner_radius_all(16)
+	glow_sb.shadow_color = Color(1.0, 0.3, 0.4, 0.0)
+	glow_sb.shadow_size = 20
 	submit_glow.add_theme_stylebox_override("panel", glow_sb)
 	submit_wrap.add_child(submit_glow)
-	submit_btn = Chrome.pill_button("Submit", SUBMIT_PINK)
+	submit_btn = _attack_button("Attack")
 	submit_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
 	submit_wrap.add_child(submit_btn)
 	actions.add_child(submit_wrap)
+
+	clear_btn = Button.new()
+	clear_btn.visible = false
+	actions.add_child(clear_btn)
 	return actions
+
+func _attack_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(0, 52)
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.add_theme_font_size_override("font_size", 19)
+	b.add_theme_color_override("font_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_color", Color("#ffe0e4"))
+	b.add_theme_color_override("font_pressed_color", Color("#ffc0c8"))
+	b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.4))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("#a0283a")
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2)
+	sb.border_color = Color("#d04a5a")
+	sb.shadow_color = Color(0.6, 0.1, 0.15, 0.4)
+	sb.shadow_size = 6
+	sb.shadow_offset = Vector2i(0, 3)
+	sb.content_margin_left = 24
+	sb.content_margin_right = 24
+	sb.content_margin_top = 14
+	sb.content_margin_bottom = 14
+	var press := sb.duplicate() as StyleBoxFlat
+	press.bg_color = Color("#801e2e")
+	press.shadow_size = 2
+	press.shadow_offset = Vector2i(0, 1)
+	var disabled := sb.duplicate() as StyleBoxFlat
+	disabled.bg_color = Color("#4a1a22")
+	disabled.border_color = Color("#6a2a34")
+	disabled.shadow_size = 2
+	b.add_theme_stylebox_override("normal", sb)
+	b.add_theme_stylebox_override("hover", sb)
+	b.add_theme_stylebox_override("pressed", press)
+	b.add_theme_stylebox_override("focus", sb)
+	b.add_theme_stylebox_override("disabled", disabled)
+	return b
 
 # ---- HP row helpers ----
 func _hp_bar(fill: Color, _mirrored: bool = false) -> ProgressBar:
@@ -421,7 +525,7 @@ func _start_battle(idx: int) -> void:
 	_used_words.clear()
 	_player_streak_5plus = 0
 	_player_word_streak = 0
-	_rainbow_pending = false
+	_rainbow_auto_busy = false
 	_enemy_frozen = false
 	_enemy_poison = 0
 	_leech_turns = 0
@@ -590,7 +694,7 @@ func _refresh_current_word() -> void:
 	submit_btn.disabled = w.length() < MIN_WORD_LEN
 	# Live damage preview — gem-aware.
 	if w.length() >= MIN_WORD_LEN:
-		var dmg := _calc_damage(_selected, w, _rainbow_pending)
+		var dmg := _calc_damage(_selected, w)
 		var topic_match := Topics.has(_topic, w.to_lower())
 		var note := ""
 		if topic_match:
@@ -608,7 +712,7 @@ func _refresh_current_word() -> void:
 
 ## Final damage for a word given its tiles — folds in gems, topic, gold, rainbow
 ## and equipped-item multipliers. Used by both the live preview and submit.
-func _calc_damage(tiles: Array, word: String, use_rainbow: bool) -> int:
+func _calc_damage(tiles: Array, word: String) -> int:
 	var fire := 0
 	var gold := 0
 	var diamond := 0
@@ -624,8 +728,6 @@ func _calc_damage(tiles: Array, word: String, use_rainbow: bool) -> int:
 		d *= TOPIC_MULTIPLIER
 	if gold > 0:
 		d *= (1.0 + float(gold))
-	if use_rainbow:
-		d *= float(RAINBOW_DAMAGE_MULT)
 	d *= Items.mult_effect("dmg_mult")
 	return int(round(d))
 
@@ -655,8 +757,6 @@ func _submit_player_word() -> void:
 	_used_words[word] = true
 
 	var topic_match := Topics.has(_topic, word)
-	var rainbow_used := _rainbow_pending
-	# Tally gems + hazards in the chain.
 	var fire_count := 0
 	var ice_count := 0
 	var poison_count := 0
@@ -670,12 +770,7 @@ func _submit_player_word() -> void:
 			Tile.Gem.HEALING: heal_count += 1
 		if t.hazard == Tile.Hazard.POISONED:
 			poisoned_hazard += 1
-	var dmg := _calc_damage(_selected, word, rainbow_used)
-	if rainbow_used:
-		_rainbow_pending = false
-		for tx: Tile in _tiles:
-			if tx != null:
-				tx.rainbow = false
+	var dmg := _calc_damage(_selected, word)
 
 	var xp_base := word.length() * 10 + (STREAK_BONUS * _player_word_streak)
 	if topic_match:
@@ -710,8 +805,6 @@ func _submit_player_word() -> void:
 		_longest_word = word_up
 	if topic_match:
 		_topic_matches += 1
-	if rainbow_used:
-		_rainbows_used += 1
 
 	# Rainbow streak: 5+ letter words consecutively.
 	if word.length() >= 5:
@@ -725,7 +818,6 @@ func _submit_player_word() -> void:
 
 	var tag := ""
 	if topic_match: tag += "  ×2 TOPIC!"
-	if rainbow_used: tag += "  RAINBOW ×%d!" % RAINBOW_DAMAGE_MULT
 	if ice_count > 0: tag += "  FROZEN!"
 	if poison_count > 0: tag += "  POISON!"
 	_flash_hit("%s for %d dmg%s" % [word_up, dmg, tag])
@@ -836,18 +928,20 @@ func _enemy_turn() -> void:
 		await get_tree().create_timer(0.6).timeout
 		_end_enemy_turn()
 		return
-	# Animate selection one letter at a time so the player can read the word as
-	# it forms. Show preview text in the status line, then pause before the hit.
 	var path: Array = pick.path
 	var word: String = pick.word
+	_show_word_toast("")
 	for i in path.size():
 		var t: Tile = _tiles[path[i]]
 		t.selected_order = i
-		# Live preview of the partial word the enemy is spelling.
-		_set_status("Enemy: %s_" % word.substr(0, i + 1).to_upper())
+		var partial := word.substr(0, i + 1).to_upper()
+		_show_enemy_action(partial + "_")
+		_show_word_toast(partial)
+		Fx.shake(self, 2.0, 0.12)
+		Audio.play("select", 0.03, lerpf(0.7, 1.3, clampf(float(i) / float(path.size()), 0.0, 1.0)))
 		await get_tree().create_timer(0.32).timeout
-	# Hold the completed word so the player can read it before the hit.
-	_set_status("Enemy plays %s…" % word.to_upper())
+	_show_enemy_action(word.to_upper())
+	_show_word_toast(word.to_upper())
 	await get_tree().create_timer(0.7).timeout
 	var topic_match := Topics.has(_topic, word)
 	var raw_dmg: int = _word_damage(word.length())
@@ -855,7 +949,11 @@ func _enemy_turn() -> void:
 		raw_dmg = int(raw_dmg * TOPIC_MULTIPLIER)
 	var dmg := _damage_player(raw_dmg)
 	_used_words[word] = true
-	_set_status("Enemy played %s for %d dmg%s" % [word.to_upper(), dmg, "  ×2 TOPIC!" if topic_match else ""])
+	var action_text := "%s → %d dmg" % [word.to_upper(), dmg]
+	if topic_match:
+		action_text += "  ×2!"
+	_show_enemy_action(action_text)
+	_show_word_toast("%s\n-%d" % [word.to_upper(), dmg])
 	# ----- ENEMY HIT FX on the player -----
 	var e_big := dmg >= 350
 	if player_avatar != null and enemy_avatar != null and is_inside_tree():
@@ -875,6 +973,7 @@ func _enemy_turn() -> void:
 			_avatar_center(player_avatar), Color("#c5402f"), on_hit)
 	# Hold on the hit reaction before the tiles dissolve.
 	await get_tree().create_timer(0.7).timeout
+	_hide_word_toast()
 	# Consume + refill those tiles.
 	_selected.clear()
 	for i in path:
@@ -890,11 +989,12 @@ func _end_enemy_turn() -> void:
 	_busy = false
 	_is_player_turn = true
 	_dim_board(false)
+	_hide_enemy_action()
 	_tick_player_turn_start()
 	if _player_hp <= 0:
 		_defeat()
 		return
-	_set_status(status_label.text + "  |  Your turn.")
+	_set_status("Your turn — form a word!")
 	_refresh_hud()
 
 ## Plays the defeat sting and routes to the defeat screen.
@@ -907,6 +1007,7 @@ func _defeat() -> void:
 	_dim_board(false)
 	await get_tree().create_timer(0.8).timeout
 	_publish_session(false)
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
 	get_tree().change_scene_to_file("res://games/word_fight/defeat.tscn")
 
 ## Body anchor of a 2.5D combatant in this Control's local space — FX aim here.
@@ -1129,6 +1230,39 @@ func _resolve_path_for_word(word: String) -> Array:
 
 # ---------------- HUD / status ----------------
 
+func _show_enemy_action(text: String) -> void:
+	if enemy_action_label != null:
+		enemy_action_label.text = text
+	if enemy_action_chip != null:
+		enemy_action_chip.visible = true
+
+func _hide_enemy_action() -> void:
+	if enemy_action_chip != null:
+		enemy_action_chip.visible = false
+
+func _show_word_toast(text: String) -> void:
+	if enemy_word_toast == null:
+		return
+	enemy_word_toast_label.text = text
+	enemy_word_toast.visible = true
+	enemy_word_toast.modulate.a = 1.0
+	enemy_word_toast.scale = Vector2(1.0, 1.0)
+	await get_tree().process_frame
+	var sz := enemy_word_toast.size
+	var p := size
+	enemy_word_toast.pivot_offset = sz * 0.5
+	enemy_word_toast.position = Vector2((p.x - sz.x) * 0.5, p.y * 0.35 - sz.y * 0.5)
+	var tw := enemy_word_toast.create_tween()
+	tw.tween_property(enemy_word_toast, "scale", Vector2(1.06, 1.06), 0.06).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(enemy_word_toast, "scale", Vector2(1.0, 1.0), 0.08)
+
+func _hide_word_toast() -> void:
+	if enemy_word_toast == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(enemy_word_toast, "modulate:a", 0.0, 0.3)
+	tw.tween_callback(func(): enemy_word_toast.visible = false)
+
 func _refresh_hud() -> void:
 	player_hp_label.text = "%d" % _player_hp
 	enemy_hp_label.text = "%d" % _enemy_hp
@@ -1139,8 +1273,8 @@ func _refresh_hud() -> void:
 	_tint_hp_bar(player_hp_bar, float(_player_hp) / float(maxi(_player_max_hp, 1)))
 	_tint_hp_bar(enemy_hp_bar, float(_enemy_hp) / float(maxi(_enemy_max_hp, 1)))
 	_pulse_hp_if_low(player_hp_bar, float(_player_hp) / float(maxi(_player_max_hp, 1)))
-	rainbow_btn.disabled = _rainbows <= 0 or not _is_player_turn or _busy
-	rainbow_btn.text = "Armed" if _rainbow_pending else "Use (%d)" % _rainbows
+	rainbow_btn.disabled = _rainbows <= 0 or not _is_player_turn or _busy or _rainbow_auto_busy
+	rainbow_btn.text = "%s (%d)" % [RAINBOW_LABEL, _rainbows]
 	_refresh_streak_dots()
 	# Active-turn glow on whoever is acting.
 	if player_avatar != null:
@@ -1250,21 +1384,78 @@ func _flash_hit(s: String) -> void:
 
 func _use_rainbow() -> void:
 	if _busy or not _is_player_turn: return
-	if _rainbows <= 0 or _rainbow_pending: return
+	if _rainbows <= 0 or _rainbow_auto_busy: return
 	_rainbows -= 1
-	_rainbow_pending = true
+	_rainbows_used += 1
+	_rainbow_auto_busy = true
 	Audio.play("rainbow")
-	_flash_status("Rainbow armed — next word deals ×%d damage" % RAINBOW_DAMAGE_MULT, Color(0.9, 0.55, 0.95))
-	# Iridescent screen sweep + tile rainbow shimmer until consumed.
 	if rainbow_sweep != null:
 		rainbow_sweep.color = Color(1, 0.4, 0.95, 0.0)
 		var tw := create_tween()
 		tw.tween_property(rainbow_sweep, "color:a", 0.35, 0.18)
 		tw.tween_property(rainbow_sweep, "color:a", 0.0, 0.6)
-	for t: Tile in _tiles:
-		if t != null:
-			t.rainbow = true
+	_flash_status("Rainbow auto-correct!", Color(0.9, 0.55, 0.95))
 	_refresh_hud()
+	var pick := await _rainbow_pick_best_word()
+	if pick.is_empty():
+		_flash_invalid("No word found!")
+		_rainbows += 1
+		_rainbows_used -= 1
+		_rainbow_auto_busy = false
+		_refresh_hud()
+		return
+	_clear_chain()
+	var path: Array = pick.path
+	var word: String = pick.word
+	for i in path.size():
+		var t: Tile = _tiles[path[i]]
+		t.selected_order = i
+		_selected.append(t)
+		for tx: Tile in _tiles:
+			if tx != null:
+				tx.rainbow = true
+		Audio.play("select", 0.04, lerpf(0.85, 1.45, clampf(float(_selected.size()) / 9.0, 0.0, 1.0)))
+		_refresh_current_word()
+		await get_tree().create_timer(0.1).timeout
+	for tx: Tile in _tiles:
+		if tx != null:
+			tx.rainbow = false
+	_refresh_current_word()
+	await get_tree().create_timer(0.25).timeout
+	_rainbow_auto_busy = false
+	_submit_player_word()
+
+func _rainbow_pick_best_word() -> Dictionary:
+	var letters := ""
+	for t: Tile in _tiles:
+		if t != null and not t.is_blocked():
+			letters += t.letter.to_lower()
+	var holder: Array = [null]
+	var task_id := WorkerThreadPool.add_task(func() -> void:
+		holder[0] = Words.words_from_letters(letters, MIN_WORD_LEN, false, 7)
+	)
+	while not WorkerThreadPool.is_task_completed(task_id):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task_id)
+	var candidates: Array[String] = holder[0]
+	var fresh: Array[String] = []
+	for w in candidates:
+		if not _used_words.has(w):
+			fresh.append(w)
+	if fresh.is_empty():
+		return {}
+	fresh.sort_custom(func(a: String, b: String) -> bool:
+		var da := _word_damage(a.length())
+		var db := _word_damage(b.length())
+		if Topics.has(_topic, a): da = int(da * TOPIC_MULTIPLIER)
+		if Topics.has(_topic, b): db = int(db * TOPIC_MULTIPLIER)
+		return da > db
+	)
+	var word: String = fresh[0]
+	var path := _resolve_path_for_word(word)
+	if path.is_empty():
+		return {}
+	return {"word": word, "path": path}
 
 func _update_submit_glow(word_len: int) -> void:
 	if submit_glow == null: return
@@ -1308,6 +1499,7 @@ func _on_enemy_defeated() -> void:
 	Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.45))
 	await get_tree().create_timer(0.9).timeout
 	_publish_session(true)
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
 	get_tree().change_scene_to_file("res://games/word_fight/victory.tscn")
 
 ## Smoothly tween an HP bar's value + tint instead of snapping.

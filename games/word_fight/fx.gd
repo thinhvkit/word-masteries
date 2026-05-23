@@ -524,42 +524,56 @@ class BoardBG extends Control:
 ## Full-screen landscape backdrop: graded sky, a glowing horizon, and a
 ## perspective floor plane that grounds the two combatants in a 2.5D stage.
 class ArenaBG extends Control:
-	const _SKY_TOP := Color("#2c1f5e")
-	const _SKY_BOT := Color("#e09a6a")
-	const _FLOOR_TOP := Color("#7a4f9c")
-	const _FLOOR_BOT := Color("#1d1230")
+	const THEMES := [
+		{"sky_top": Color("#0f1a12"), "sky_bot": Color("#3a7a3f"), "floor_top": Color("#1f3a22"), "floor_bot": Color("#080e08"), "glow": Color(0.4, 0.9, 0.5, 0.14), "line": Color(0.5, 1, 0.6, 0.06)},
+		{"sky_top": Color("#12122a"), "sky_bot": Color("#c4943a"), "floor_top": Color("#5a5a7a"), "floor_bot": Color("#0e0e1a"), "glow": Color(1.0, 0.9, 0.6, 0.2), "line": Color(1, 0.95, 0.8, 0.07)},
+		{"sky_top": Color("#1a0e04"), "sky_bot": Color("#c46a1a"), "floor_top": Color("#6a3a18"), "floor_bot": Color("#0e0604"), "glow": Color(1.0, 0.7, 0.3, 0.18), "line": Color(1, 0.8, 0.5, 0.06)},
+		{"sky_top": Color("#0e0408"), "sky_bot": Color("#5a1020"), "floor_top": Color("#2a0e16"), "floor_bot": Color("#060204"), "glow": Color(0.9, 0.2, 0.3, 0.16), "line": Color(0.9, 0.3, 0.4, 0.06)},
+	]
+
+	var sky_top := Color("#2c1f5e")
+	var sky_bot := Color("#e09a6a")
+	var floor_top := Color("#7a4f9c")
+	var floor_bot := Color("#1d1230")
+	var glow_color := Color(1, 0.86, 0.62, 0.18)
+	var line_color := Color(1, 1, 1, 0.07)
+
+	func set_world(world_idx: int) -> void:
+		var t: Dictionary = THEMES[clampi(world_idx, 0, THEMES.size() - 1)]
+		sky_top = t.sky_top
+		sky_bot = t.sky_bot
+		floor_top = t.floor_top
+		floor_bot = t.floor_bot
+		glow_color = t.glow
+		line_color = t.line
+		queue_redraw()
 
 	func _draw() -> void:
 		var w := size.x
 		var h := size.y
 		var horizon: float = h * 0.5
-		# Sky gradient.
 		var bands := 22
 		for i in bands:
 			var y0: float = horizon * float(i) / bands
 			var y1: float = horizon * float(i + 1) / bands
-			draw_rect(Rect2(0, y0, w, y1 - y0), _SKY_TOP.lerp(_SKY_BOT, float(i) / bands))
-		# Distant sun glow at the horizon.
-		draw_circle(Vector2(w * 0.5, horizon), h * 0.26, Color(1, 0.86, 0.62, 0.18))
-		draw_circle(Vector2(w * 0.5, horizon), h * 0.15, Color(1, 0.92, 0.72, 0.30))
-		# Floor gradient.
+			draw_rect(Rect2(0, y0, w, y1 - y0), sky_top.lerp(sky_bot, float(i) / bands))
+		draw_circle(Vector2(w * 0.5, horizon), h * 0.26, glow_color)
+		draw_circle(Vector2(w * 0.5, horizon), h * 0.15, Color(glow_color.r, glow_color.g, glow_color.b, glow_color.a * 1.6))
 		var fb := 18
 		for i in fb:
 			var y0: float = horizon + (h - horizon) * float(i) / fb
 			var y1: float = horizon + (h - horizon) * float(i + 1) / fb
-			draw_rect(Rect2(0, y0, w, y1 - y0), _FLOOR_TOP.lerp(_FLOOR_BOT, float(i) / fb))
-		# Perspective floor lines converging on the vanishing point.
+			draw_rect(Rect2(0, y0, w, y1 - y0), floor_top.lerp(floor_bot, float(i) / fb))
 		var vp := Vector2(w * 0.5, horizon)
 		for k in 13:
 			var fx: float = w * (float(k) / 12.0 - 0.5) * 2.4 + w * 0.5
-			draw_line(Vector2(fx, h), vp, Color(1, 1, 1, 0.07), 1.5, true)
+			draw_line(Vector2(fx, h), vp, line_color, 1.5, true)
 		for k in range(1, 7):
 			var t: float = float(k) / 6.0
 			var yy: float = horizon + (h - horizon) * t * t
-			draw_line(Vector2(0, yy), Vector2(w, yy), Color(1, 1, 1, 0.06), 1.5, true)
-		# Soft top + bottom vignette.
+			draw_line(Vector2(0, yy), Vector2(w, yy), Color(line_color.r, line_color.g, line_color.b, line_color.a * 0.85), 1.5, true)
 		for i in 8:
-			var a: float = (1.0 - float(i) / 8.0) * 0.14
+			var a: float = (1.0 - float(i) / 8.0) * 0.18
 			draw_rect(Rect2(0, i * 4, w, 4), Color(0, 0, 0, a))
 			draw_rect(Rect2(0, h - (i + 1) * 5, w, 5), Color(0, 0, 0, a))
 

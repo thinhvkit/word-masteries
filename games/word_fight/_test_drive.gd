@@ -102,17 +102,16 @@ func _initialize() -> void:
 	root._refresh_hud()
 	print(" rb btn text=", rb_btn.text, " disabled=", rb_btn.disabled)
 	rb_btn.pressed.emit()
-	print(" after arm: pending=", root._rainbow_pending, " rb.text=", rb_btn.text)
+	print(" after use: auto_busy=", root._rainbow_auto_busy, " rb.text=", rb_btn.text)
 
 	# --- Test 6: clear chain ---
-	print("\n=== TEST 6: clear button ===")
+	print("\n=== TEST 6: clear chain ===")
 	root._is_player_turn = true; root._busy = false
 	root._clear_chain()
 	grid.get_child(0).pressed.emit()
 	grid.get_child(1).pressed.emit()
 	print(" before clear: word=", current.text, " selected=", root._selected.size())
-	var clear_btn: Button = root.get_node("V/Actions/Clear")
-	clear_btn.pressed.emit()
+	root._clear_chain()
 	print(" after clear: word=", current.text, " selected=", root._selected.size())
 
 	# --- Test 7: tap selected tile to pop back ---

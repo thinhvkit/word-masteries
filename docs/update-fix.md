@@ -1,0 +1,2 @@
+- remove clear button, and summit -> Attack.
+- redesign button ui and battle-arena backdrop follow the enemy ability with style dungeon, epic 

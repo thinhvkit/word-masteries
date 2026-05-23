@@ -24,10 +24,6 @@ Palette="*res://autoload/palette.gd"
 Navigator="*res://autoload/navigator.gd"
 Audio="*res://autoload/audio.gd"
 
-[audio]
-
-buses/default_bus_layout="res://default_bus_layout.tres"
-
 [display]
 
 window/size/viewport_width=844
@@ -36,7 +32,6 @@ window/size/window_width_override=844
 window/size/window_height_override=390
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=0
 
 [gui]
 
