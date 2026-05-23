@@ -47,6 +47,10 @@ func _ready() -> void:
 	add_child(bg)
 	move_child(bg, 0)
 
+	var sc_bar: VScrollBar = $V/Scroll.get_v_scroll_bar()
+	for s_name in ["scroll", "scroll_highlight", "scroll_pressed", "grabber", "grabber_highlight", "grabber_pressed"]:
+		sc_bar.add_theme_stylebox_override(s_name, StyleBoxEmpty.new())
+
 	var who := GameState.player_name if not GameState.player_name.is_empty() else "there"
 	greet.text = "Hi, %s" % who
 	greet.add_theme_color_override("font_color", Color.WHITE)
@@ -54,6 +58,7 @@ func _ready() -> void:
 	greet.add_theme_constant_override("outline_size", 4)
 	greet.add_theme_font_size_override("font_size", 24)
 	_insert_avatar_chip()
+	_insert_sound_toggle()
 	_style_xp_pill()
 	_refresh_xp()
 
@@ -126,6 +131,51 @@ func _insert_avatar_chip() -> void:
 	var hdr := $V/Header as HBoxContainer
 	hdr.add_child(holder)
 	hdr.move_child(holder, 0)
+
+func _insert_sound_toggle() -> void:
+	var btn := Button.new()
+	btn.text = "ON" if GameState.sound_on else "OFF"
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(44, 44)
+	btn.add_theme_font_size_override("font_size", 13)
+	var fg := Color.WHITE if GameState.sound_on else Color(1, 1, 1, 0.5)
+	btn.add_theme_color_override("font_color", fg)
+	btn.add_theme_color_override("font_hover_color", fg)
+	btn.add_theme_color_override("font_pressed_color", fg)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = VIBRANT_BLUE if GameState.sound_on else Color(0.3, 0.3, 0.4, 0.6)
+	sb.set_corner_radius_all(99)
+	sb.set_border_width_all(2)
+	sb.border_color = VIBRANT_BLUE_DARK if GameState.sound_on else Color(0.4, 0.4, 0.5, 0.4)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	sb.shadow_color = Color(0, 0, 0, 0.22)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2i(0, 1)
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb)
+	btn.add_theme_stylebox_override("pressed", sb)
+	btn.add_theme_stylebox_override("focus", sb)
+	btn.modulate = Color.WHITE if GameState.sound_on else Color(0.7, 0.7, 0.7, 1.0)
+	btn.pressed.connect(func():
+		GameState.toggle_sound()
+		btn.text = "ON" if GameState.sound_on else "OFF"
+		btn.modulate = Color.WHITE if GameState.sound_on else Color(0.7, 0.7, 0.7, 1.0)
+		var new_sb := sb.duplicate() as StyleBoxFlat
+		new_sb.bg_color = VIBRANT_BLUE if GameState.sound_on else Color(0.3, 0.3, 0.4, 0.6)
+		new_sb.border_color = VIBRANT_BLUE_DARK if GameState.sound_on else Color(0.4, 0.4, 0.5, 0.4)
+		btn.add_theme_stylebox_override("normal", new_sb)
+		btn.add_theme_stylebox_override("hover", new_sb)
+		btn.add_theme_stylebox_override("pressed", new_sb)
+		btn.add_theme_stylebox_override("focus", new_sb)
+		var new_fg := Color.WHITE if GameState.sound_on else Color(1, 1, 1, 0.5)
+		btn.add_theme_color_override("font_color", new_fg)
+		btn.add_theme_color_override("font_hover_color", new_fg)
+		btn.add_theme_color_override("font_pressed_color", new_fg))
+	var hdr := $V/Header as HBoxContainer
+	hdr.add_child(btn)
 
 func _chip(text: String, bg: Color, fg: Color, clickable: bool, border: Color = Color(0, 0, 0, 0)) -> Button:
 	var b := Button.new()

@@ -13,6 +13,7 @@ var player_avatar: String = "butterfly"   # id under res://assets/avatars/<id>.s
 var mode: int = Mode.INTERMEDIATE
 var total_xp: int = 0
 var per_game_xp: Dictionary = {}  # game_id -> int
+var sound_on: bool = true
 
 # --- Word Fight meta-progression (persisted) ---
 var lex_level: int = 1
@@ -129,6 +130,7 @@ func save() -> void:
 		"equipped_items": equipped_items,
 		"wf_world_idx": wf_world_idx,
 		"wf_world_progress": wf_world_progress,
+		"sound_on": sound_on,
 	}
 	f.store_string(JSON.stringify(data))
 
@@ -156,6 +158,18 @@ func load_save() -> void:
 	var prog: Variant = parsed.get("wf_world_progress", [0, 0, 0, 0])
 	if prog is Array and (prog as Array).size() == 4:
 		wf_world_progress = [int(prog[0]), int(prog[1]), int(prog[2]), int(prog[3])]
+	sound_on = parsed.get("sound_on", true)
+	_apply_sound()
+
+func _apply_sound() -> void:
+	Audio.set_sfx_enabled(sound_on)
+	Audio.set_music_enabled(sound_on)
+
+func toggle_sound() -> void:
+	sound_on = not sound_on
+	_apply_sound()
+	save()
 
 func _ready() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
 	load_save()
