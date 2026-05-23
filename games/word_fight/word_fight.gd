@@ -159,11 +159,52 @@ func _build_ui() -> void:
 	arena_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	arena_bg.set_world(_world_idx)
 	add_child(arena_bg)
-	back_btn = Chrome.header(self, "Word Fight", "%s ×2" % _topic.capitalize(), Color("#fff1c4"), Color("#b48218"))
-	var _hdr_row := back_btn.get_parent() as HBoxContainer
+	# Dark dungeon-style header matching the arena backdrop.
+	var hdr_panel := PanelContainer.new()
+	hdr_panel.anchor_right = 1.0
+	hdr_panel.offset_bottom = Chrome.HEADER_H
+	var hdr_sb := StyleBoxFlat.new()
+	hdr_sb.bg_color = Color(0.06, 0.04, 0.10, 0.85)
+	hdr_sb.shadow_color = Color(0, 0, 0, 0.4)
+	hdr_sb.shadow_size = 6
+	hdr_sb.shadow_offset = Vector2i(0, 2)
+	hdr_sb.content_margin_left = 16
+	hdr_sb.content_margin_right = 16
+	hdr_sb.content_margin_top = 18
+	hdr_sb.content_margin_bottom = 16
+	hdr_panel.add_theme_stylebox_override("panel", hdr_sb)
+	add_child(hdr_panel)
+	var _hdr_row := HBoxContainer.new()
+	_hdr_row.add_theme_constant_override("separation", 12)
+	hdr_panel.add_child(_hdr_row)
+	back_btn = Button.new()
+	back_btn.text = ""
+	back_btn.focus_mode = Control.FOCUS_NONE
+	var arrow_tex_path := "res://assets/icons/arrow_left.svg"
+	if ResourceLoader.exists(arrow_tex_path):
+		back_btn.icon = load(arrow_tex_path)
+		back_btn.expand_icon = false
+		back_btn.modulate = Color("#c0b4a6")
+	else:
+		back_btn.text = "<"
+		back_btn.add_theme_font_size_override("font_size", 22)
+	back_btn.add_theme_color_override("font_color", Color("#c0b4a6"))
+	var empty_sb := StyleBoxEmpty.new()
+	back_btn.add_theme_stylebox_override("normal", empty_sb)
+	back_btn.add_theme_stylebox_override("hover", empty_sb)
+	back_btn.add_theme_stylebox_override("pressed", empty_sb)
+	back_btn.add_theme_stylebox_override("focus", empty_sb)
+	back_btn.custom_minimum_size = Vector2(32, 32)
+	_hdr_row.add_child(back_btn)
+	var title_lbl := Label.new()
+	title_lbl.text = "Word Fight"
+	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_color_override("font_color", Color("#e0d4c6"))
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hdr_row.add_child(title_lbl)
 	enemy_action_chip = PanelContainer.new()
 	var ea_sb := StyleBoxFlat.new()
-	ea_sb.bg_color = Color("#fde0e7")
+	ea_sb.bg_color = Color(0.8, 0.2, 0.3, 0.35)
 	ea_sb.set_corner_radius_all(99)
 	ea_sb.content_margin_left = 12
 	ea_sb.content_margin_right = 12
@@ -172,12 +213,13 @@ func _build_ui() -> void:
 	enemy_action_chip.add_theme_stylebox_override("panel", ea_sb)
 	enemy_action_label = Label.new()
 	enemy_action_label.text = ""
-	enemy_action_label.add_theme_color_override("font_color", HP_PINK_DARK)
+	enemy_action_label.add_theme_color_override("font_color", Color("#ff8a9a"))
 	enemy_action_label.add_theme_font_size_override("font_size", 14)
 	enemy_action_chip.add_child(enemy_action_label)
 	enemy_action_chip.visible = false
 	_hdr_row.add_child(enemy_action_chip)
-	_hdr_row.move_child(enemy_action_chip, _hdr_row.get_child_count() - 2)
+	var topic_chip := Chrome.chip("%s ×2" % _topic.capitalize(), Color(0.9, 0.75, 0.3, 0.25), Color("#ffd060"))
+	_hdr_row.add_child(topic_chip)
 	# topic_label kept (hidden) so _start_battle can write to it harmlessly.
 	topic_label = Label.new()
 	topic_label.visible = false
@@ -271,7 +313,7 @@ func _combatant_column(is_player: bool) -> VBoxContainer:
 	var value_lbl := Label.new()
 	value_lbl.text = "1000"
 	value_lbl.add_theme_font_size_override("font_size", 15)
-	value_lbl.add_theme_color_override("font_color", Chrome.TEXT)
+	value_lbl.add_theme_color_override("font_color", Color("#c0b4a6"))
 	value_lbl.custom_minimum_size = Vector2(46, 0)
 	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -313,7 +355,7 @@ func _center_column() -> VBoxContainer:
 	status_label.text = ""
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.clip_text = true
-	status_label.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	status_label.add_theme_color_override("font_color", Color("#8a7e72"))
 	status_label.add_theme_font_size_override("font_size", 15)
 	col.add_child(status_label)
 

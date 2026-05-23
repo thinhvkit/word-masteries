@@ -9,7 +9,7 @@ const WORLDS := [
 	{
 		"name": "Whispering Woods",
 		"subtitle": "Where Lex first learned to spell.",
-		"topics": ["food", "animal"],
+		"topics": ["food", "animal", "nature", "noun"],
 		"enemies": [
 			{"name": "Wriggles Jr.", "avatar": "wriggles_jr", "hp": 4800, "skill": 0.55, "abilities": []},
 			{"name": "Spelluga",      "avatar": "spelluga",    "hp": 5100, "skill": 0.66, "abilities": ["scramble"]},
@@ -20,7 +20,7 @@ const WORLDS := [
 	{
 		"name": "Mount Olympus",
 		"subtitle": "Greek myths guard the longest words.",
-		"topics": ["shape", "color"],
+		"topics": ["shape", "color", "body", "adjective"],
 		"enemies": [
 			{"name": "Hydra Hatchling",  "avatar": "wriggles_jr", "hp": 5900, "skill": 0.62, "abilities": ["scramble"]},
 			{"name": "Medusa Quill",     "avatar": "spelluga",    "hp": 6100, "skill": 0.74, "abilities": ["scramble", "lock"]},
@@ -31,7 +31,7 @@ const WORLDS := [
 	{
 		"name": "Arabian Nights",
 		"subtitle": "A thousand tales, a thousand traps.",
-		"topics": ["food", "color"],
+		"topics": ["clothing", "home", "weather", "verb"],
 		"enemies": [
 			{"name": "Sand Serpent",    "avatar": "wriggles_jr", "hp": 6600, "skill": 0.68, "abilities": ["burn", "scramble"]},
 			{"name": "Lamp Wraith",     "avatar": "spelluga",    "hp": 6750, "skill": 0.80, "abilities": ["lock", "poison"]},
@@ -42,7 +42,7 @@ const WORLDS := [
 	{
 		"name": "Transylvania",
 		"subtitle": "The final word waits in the dark.",
-		"topics": ["animal", "shape"],
+		"topics": ["animal", "sport", "verb", "adjective"],
 		"enemies": [
 			{"name": "Crypt Crawler", "avatar": "wriggles_jr", "hp": 7150, "skill": 0.75, "abilities": ["poison", "scramble", "burn"]},
 			{"name": "Quill Bat",     "avatar": "spelluga",    "hp": 7250, "skill": 0.86, "abilities": ["lock", "burn", "leech"]},

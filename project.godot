@@ -26,12 +26,13 @@ Audio="*res://autoload/audio.gd"
 
 [display]
 
-window/size/viewport_width=844
-window/size/viewport_height=390
-window/size/window_width_override=844
-window/size/window_height_override=390
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/size/window_width_override=390
+window/size/window_height_override=844
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [gui]
 

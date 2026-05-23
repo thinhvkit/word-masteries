@@ -40,7 +40,7 @@ const BONUS_LONG_MULT := 1.5              # >target length → base × 1.5
 # Curated 10–12 letter anchor pools rich in sub-words. Each is verified by
 # the dictionary at runtime; if a pool fails the target-count check we resample.
 const POOLS := [
-	"STREAMING",         # 9 — STREAM/STING/TRAIN/MAIN/RAIN/...
+	"STREAMING",         # 9
 	"PAINTERS",          # 8
 	"REACTIONS",         # 9
 	"STRANGER",          # 8
@@ -48,13 +48,28 @@ const POOLS := [
 	"PLANETARY",         # 9
 	"MOUNTAIN",          # 8
 	"PARENTING",         # 9
-	"SCRAMBLED",         # 9 — RAMBLE/SCALE/CRAB/LACED/...
+	"SCRAMBLED",         # 9
 	"GARDENER",          # 8
-	"BREATHING",         # 9 — BREATH/BRING/HEAT/NEAR/...
-	"TROUBLES",          # 8 — ROBES/STOLE/LOSER/TUBE/...
+	"BREATHING",         # 9
+	"TROUBLES",          # 8
 	"DREAMING",          # 8
 	"LANTERNS",          # 8
 	"PROBLEM",           # 7
+	"CHAPTERS",          # 8
+	"HOMELAND",          # 8
+	"CREATION",          # 8
+	"SPEAKING",          # 8
+	"PRODUCTS",          # 8
+	"WONDERED",          # 8
+	"STRONGER",          # 8
+	"CLIMBING",          # 8
+	"TRAMPLED",          # 8
+	"BRANCHES",          # 8
+	"SCOLDING",          # 8
+	"MATERIAL",          # 8
+	"DISCOVER",          # 8
+	"ORDERING",          # 8
+	"PLATFORM",          # 8
 ]
 
 # Wave target templates by tier and difficulty mode.
@@ -412,10 +427,15 @@ func _pick_pool(template: Array) -> Dictionary:
 	var attempts := POOLS.duplicate()
 	attempts.shuffle()
 	for p: String in attempts:
+		if p == _pool_letters:
+			continue
 		var avail := _bucket_words(p)
 		if _template_satisfiable(template, avail):
 			return {"pool": p, "targets": _annotate_targets(template)}
-	# Fallback: STREAMING is reliable.
+	for p: String in attempts:
+		var avail := _bucket_words(p)
+		if _template_satisfiable(template, avail):
+			return {"pool": p, "targets": _annotate_targets(template)}
 	return {"pool": "STREAMING", "targets": _annotate_targets(template)}
 
 func _bucket_words(pool: String) -> Dictionary:

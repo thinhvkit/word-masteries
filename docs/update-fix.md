@@ -1,2 +1,3 @@
-- remove clear button, and summit -> Attack.
-- redesign button ui and battle-arena backdrop follow the enemy ability with style dungeon, epic 
+- game-fight: topic need more various
+- game-match: letters should randomly change each wave 
+- game-found: letters randomly change 
