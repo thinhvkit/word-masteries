@@ -123,34 +123,81 @@ func _ready() -> void:
 	submit_btn.pressed.connect(_submit_word)
 	clear_btn.pressed.connect(_clear_chain)
 	_apply_design()
-	_start_wave(1)
+	if not _load_session():
+		_start_wave(1)
 
 func _apply_design() -> void:
-	Chrome.bg_layer(self)
-	var hdr_back := Chrome.header(self, "Word Found", "word_found", GREEN_LIGHT, GREEN_DARK)
-	hdr_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
-	# Body needs to clear the header band.
+	# Dark arena backdrop instead of cream.
+	var arena_bg := Fx.ArenaBG.new()
+	arena_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	arena_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	arena_bg.set_world(0)
+	add_child(arena_bg)
+	move_child(arena_bg, 0)
+
+	# Dark header matching Word Fight.
+	var hdr_panel := PanelContainer.new()
+	hdr_panel.anchor_right = 1.0
+	hdr_panel.offset_bottom = Chrome.HEADER_H
+	var hdr_sb := StyleBoxFlat.new()
+	hdr_sb.bg_color = Color(0.06, 0.04, 0.10, 0.85)
+	hdr_sb.shadow_color = Color(0, 0, 0, 0.4)
+	hdr_sb.shadow_size = 6
+	hdr_sb.shadow_offset = Vector2i(0, 2)
+	hdr_sb.content_margin_left = 16
+	hdr_sb.content_margin_right = 16
+	hdr_sb.content_margin_top = 18
+	hdr_sb.content_margin_bottom = 16
+	hdr_panel.add_theme_stylebox_override("panel", hdr_sb)
+	add_child(hdr_panel)
+	var hdr_row := HBoxContainer.new()
+	hdr_row.add_theme_constant_override("separation", 12)
+	hdr_panel.add_child(hdr_row)
+	var hdr_back := Button.new()
+	hdr_back.text = ""
+	hdr_back.focus_mode = Control.FOCUS_NONE
+	var arrow_path := "res://assets/icons/arrow_left.svg"
+	if ResourceLoader.exists(arrow_path):
+		hdr_back.icon = load(arrow_path)
+		hdr_back.expand_icon = false
+		hdr_back.modulate = Color("#c0b4a6")
+	var empty_sb := StyleBoxEmpty.new()
+	for s_name in ["normal", "hover", "pressed", "focus"]:
+		hdr_back.add_theme_stylebox_override(s_name, empty_sb)
+	hdr_back.custom_minimum_size = Vector2(32, 32)
+	hdr_row.add_child(hdr_back)
+	var title_lbl := Label.new()
+	title_lbl.text = "Word Found"
+	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_color_override("font_color", Color("#f5efe8"))
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr_row.add_child(title_lbl)
+	hdr_back.pressed.connect(func():
+		_save_session()
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	)
+
 	var v := $V as Control
-	v.offset_top = Chrome.HEADER_H + 12
+	v.offset_top = Chrome.HEADER_H + 8
 
 	# HUD row — vibrant chip pills.
-	wave_lbl.add_theme_font_size_override("font_size", 17)
+	wave_lbl.add_theme_font_size_override("font_size", 20)
 	wave_lbl.add_theme_color_override("font_color", Color.WHITE)
-	score_lbl.add_theme_font_size_override("font_size", 17)
-	score_lbl.add_theme_color_override("font_color", VIBRANT_GOLD_DARK)
+	score_lbl.add_theme_font_size_override("font_size", 20)
+	score_lbl.add_theme_color_override("font_color", Color("#4a3000"))
 	_wave_chip = _wrap_in_vibrant_chip(wave_lbl, VIBRANT_BLUE, VIBRANT_BLUE_DARK)
 	_score_chip = _wrap_in_vibrant_chip(score_lbl, VIBRANT_GOLD, Color("#dba830"))
 
 	# Targets section — dark vibrant card.
 	var targets_label_node: Label = $V/TargetsLabel
 	targets_label_node.text = "Targets"
-	targets_label_node.add_theme_color_override("font_color", VIBRANT_GOLD)
+	targets_label_node.add_theme_color_override("font_color", Color("#ffe680"))
 	targets_label_node.add_theme_font_size_override("font_size", 16)
 	_wrap_in_dark_card([targets_label_node, targets_box], v)
 
-	# Row2: vibrant magenta current-word pill.
+	# Row2: dark translucent current-word pill.
 	row2_label.add_theme_color_override("font_color", Color.WHITE)
-	row2_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
+	row2_label.add_theme_color_override("font_outline_color", Color(0.3, 0.5, 0.35, 0.55))
 	row2_label.add_theme_constant_override("outline_size", 4)
 	row2_label.add_theme_font_size_override("font_size", 28)
 	row2_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
@@ -158,50 +205,55 @@ func _apply_design() -> void:
 	var caption := Label.new()
 	caption.text = "Your word (tap a letter to undo)"
 	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	caption.add_theme_font_size_override("font_size", 14)
-	caption.add_theme_color_override("font_color", Chrome.TEXT_SEC)
+	caption.add_theme_font_size_override("font_size", 18)
+	caption.add_theme_color_override("font_color", Color("#f0e8dc"))
+	caption.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+	caption.add_theme_constant_override("outline_size", 3)
 	v.add_child(caption)
 	v.move_child(caption, row2_node.get_index())
 	_row2_pill = PanelContainer.new()
 	var pill_sb := StyleBoxFlat.new()
-	pill_sb.bg_color = VIBRANT_MAGENTA
-	pill_sb.set_corner_radius_all(24)
-	pill_sb.set_border_width_all(3)
-	pill_sb.border_color = VIBRANT_MAGENTA_DARK
-	pill_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.4)
-	pill_sb.shadow_size = 10
+	pill_sb.bg_color = Color(0.08, 0.06, 0.14, 0.8)
+	pill_sb.set_corner_radius_all(18)
+	pill_sb.set_border_width_all(2)
+	pill_sb.border_color = Color(0.4, 0.9, 0.5, 0.3)
+	pill_sb.shadow_color = Color(0.3, 0.7, 0.4, 0.2)
+	pill_sb.shadow_size = 8
 	pill_sb.shadow_offset = Vector2i(0, 3)
 	pill_sb.content_margin_left = 16
 	pill_sb.content_margin_right = 16
-	pill_sb.content_margin_top = 12
-	pill_sb.content_margin_bottom = 12
+	pill_sb.content_margin_top = 10
+	pill_sb.content_margin_bottom = 10
 	_row2_pill.add_theme_stylebox_override("panel", pill_sb)
 	v.add_child(_row2_pill)
 	v.move_child(_row2_pill, row2_node.get_index())
 	row2_node.reparent(_row2_pill, false)
 
-	# Row1 — animated vibrant backdrop behind the grid.
+	# Row1 — stone slab backdrop behind the grid.
 	var row1_lbl: Label = $V/Row1Label
 	row1_lbl.text = "Available letters — tap to use"
 	row1_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	row1_lbl.add_theme_color_override("font_color", Chrome.TEXT_SEC)
-	row1_lbl.add_theme_font_size_override("font_size", 14)
+	row1_lbl.add_theme_color_override("font_color", Color("#f0e8dc"))
+	row1_lbl.add_theme_font_size_override("font_size", 18)
+	row1_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+	row1_lbl.add_theme_constant_override("outline_size", 3)
 	_wrap_row1_with_bg(row1_grid, v)
 
 	# Status text styling.
 	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_lbl.add_theme_color_override("font_color", Chrome.TEXT)
-	status_lbl.add_theme_font_size_override("font_size", 16)
-	bonus_lbl.add_theme_color_override("font_color", VIBRANT_GOLD_DARK)
-	bonus_lbl.add_theme_font_size_override("font_size", 15)
+	status_lbl.add_theme_color_override("font_color", Color("#f5efe8"))
+	status_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+	status_lbl.add_theme_constant_override("outline_size", 3)
+	status_lbl.add_theme_font_size_override("font_size", 18)
+	bonus_lbl.add_theme_color_override("font_color", Color("#fff0b0"))
+	bonus_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+	bonus_lbl.add_theme_constant_override("outline_size", 3)
+	bonus_lbl.add_theme_font_size_override("font_size", 20)
 
-	# Action buttons — Clear (white pill) + Submit (vibrant magenta with glow).
-	_pill_btn(clear_btn, Chrome.SURFACE, Chrome.TEXT)
-	clear_btn.add_theme_stylebox_override("normal", _pill_sb(Chrome.SURFACE, Chrome.BORDER, true))
-	clear_btn.add_theme_stylebox_override("hover", _pill_sb(Chrome.SURFACE, Chrome.BORDER, true))
-	clear_btn.add_theme_stylebox_override("pressed", _pill_sb(Chrome.BORDER, Chrome.BORDER, true))
-	_pill_btn(submit_btn, VIBRANT_MAGENTA, Color.WHITE)
-	# Wrap submit in a glow panel that activates on chain ≥ MIN_WORD_LEN.
+	# Action buttons — dungeon style matching Word Fight.
+	_dungeon_btn(clear_btn, Color("#2a2030"), Color("#5a4a6a"), Color("#e0d4c6"))
+	_dungeon_btn(submit_btn, Color("#1a5a2a"), Color("#3a8a4a"), Color.WHITE)
+	submit_btn.text = "Submit"
 	var submit_parent := submit_btn.get_parent() as Control
 	var submit_idx := submit_btn.get_index()
 	var submit_wrap := Control.new()
@@ -213,9 +265,9 @@ func _apply_design() -> void:
 	_submit_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_submit_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var glow_sb := StyleBoxFlat.new()
-	glow_sb.bg_color = Color(1, 0.5, 0.7, 0.0)
-	glow_sb.set_corner_radius_all(32)
-	glow_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.0)
+	glow_sb.bg_color = Color(0.3, 0.8, 0.4, 0.0)
+	glow_sb.set_corner_radius_all(16)
+	glow_sb.shadow_color = Color(0.3, 0.8, 0.4, 0.0)
 	glow_sb.shadow_size = 18
 	_submit_glow.add_theme_stylebox_override("panel", glow_sb)
 	submit_wrap.add_child(_submit_glow)
@@ -271,53 +323,37 @@ func _wrap_in_dark_card(nodes: Array, parent: Control) -> void:
 	for n: Node in nodes:
 		n.reparent(inner, false)
 
-func _wrap_row1_with_bg(grid: GridContainer, parent: Control) -> void:
-	var idx := grid.get_index()
-	var card := PanelContainer.new()
-	# Card stylebox = transparent shell; the animated bg fills it.
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0, 0, 0, 0)
-	sb.set_corner_radius_all(20)
-	sb.shadow_color = Color(0, 0, 0, 0.2)
-	sb.shadow_size = 5
-	sb.shadow_offset = Vector2i(0, 3)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 14
-	sb.content_margin_bottom = 14
-	card.add_theme_stylebox_override("panel", sb)
-	# Card itself must expand for the parent VBox to grant it leftover height.
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
-	parent.move_child(card, idx)
-	# Stack: wooden bg fills the card; the letter grid is scaled + centered on top.
-	var stack := Control.new()
-	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.custom_minimum_size = Vector2(0, 220)
-	card.add_child(stack)
+func _wrap_row1_with_bg(grid_node: GridContainer, parent: Control) -> void:
+	var idx := grid_node.get_index()
+	var wrap := CenterContainer.new()
+	wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(wrap)
+	parent.move_child(wrap, idx)
+	var holder := Control.new()
+	wrap.add_child(holder)
 	_row1_bg = Fx.BoardBG.new()
-	_row1_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_row1_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stack.add_child(_row1_bg)
-	grid.reparent(stack, false)
-	_row1_stack = stack
-	stack.resized.connect(_fit_row1)
-	_row1_card = card
+	holder.add_child(_row1_bg)
+	grid_node.reparent(holder, false)
+	grid_node.position = Vector2(12, 12)
+	_row1_stack = holder
+	_row1_card = wrap
+	holder.resized.connect(_fit_row1)
+	grid_node.resized.connect(_fit_row1)
+	_fit_row1.call_deferred()
 
-## Scales + centers the Row 1 letter grid so it always fits the wooden board.
 func _fit_row1() -> void:
 	if row1_grid == null or _row1_stack == null:
 		return
 	var gs := row1_grid.get_combined_minimum_size()
 	if gs.x <= 0.0 or gs.y <= 0.0:
 		return
-	var avail: Vector2 = _row1_stack.size - Vector2(20, 20)
-	var s: float = clampf(minf(avail.x / gs.x, avail.y / gs.y), 0.1, 1.0)
-	row1_grid.pivot_offset = Vector2.ZERO
-	row1_grid.scale = Vector2(s, s)
-	row1_grid.position = ((_row1_stack.size - gs * s) * 0.5).round()
+	var padded := gs + Vector2(24, 24)
+	_row1_stack.custom_minimum_size = padded
+	_row1_bg.position = Vector2.ZERO
+	_row1_bg.size = padded
+	row1_grid.scale = Vector2(1, 1)
+	row1_grid.position = Vector2(12, 12)
 
 func _wrap_in_chip(lbl: Label, bg: Color) -> void:
 	var parent := lbl.get_parent() as Control
@@ -362,6 +398,39 @@ func _wrap_in_card(nodes: Array, parent: Control, bg: Color, border: Color, radi
 	card.add_child(inner)
 	for n: Node in nodes:
 		n.reparent(inner, false)
+
+func _dungeon_btn(btn: Button, bg: Color, border: Color, fg: Color) -> void:
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", 17)
+	btn.add_theme_color_override("font_color", fg)
+	btn.add_theme_color_override("font_hover_color", fg)
+	btn.add_theme_color_override("font_pressed_color", fg)
+	btn.add_theme_color_override("font_disabled_color", Color(fg.r, fg.g, fg.b, 0.4))
+	btn.custom_minimum_size = Vector2(0, 52)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2)
+	sb.border_color = border
+	sb.shadow_color = Color(0, 0, 0, 0.3)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2i(0, 2)
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	sb.content_margin_top = 14
+	sb.content_margin_bottom = 14
+	var press := sb.duplicate() as StyleBoxFlat
+	press.bg_color = bg.darkened(0.15)
+	press.shadow_size = 1
+	var dis := sb.duplicate() as StyleBoxFlat
+	dis.bg_color = bg.darkened(0.3)
+	dis.border_color = border.darkened(0.3)
+	dis.shadow_size = 2
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb)
+	btn.add_theme_stylebox_override("pressed", press)
+	btn.add_theme_stylebox_override("focus", sb)
+	btn.add_theme_stylebox_override("disabled", dis)
 
 func _pill_btn(btn: Button, bg: Color, fg: Color) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
@@ -415,6 +484,7 @@ func _start_wave(w: int) -> void:
 	_refresh_bonus()
 	_refresh_hud()
 	_set_status("Wave %d — fill the targets below." % _wave)
+	_save_session()
 
 func _template_for_wave(w: int) -> Array:
 	var tier := "easy"
@@ -578,8 +648,8 @@ func _build_targets_box() -> void:
 		var head := Label.new()
 		head.text = "%d-letter:" % t.len
 		head.add_theme_color_override("font_color", Color.WHITE)
-		head.add_theme_font_size_override("font_size", 14)
-		head.custom_minimum_size = Vector2(80, 0)
+		head.add_theme_font_size_override("font_size", 17)
+		head.custom_minimum_size = Vector2(96, 0)
 		row.add_child(head)
 		for i in t.count:
 			var pip := _Pip.new()
@@ -653,6 +723,7 @@ func _submit_word() -> void:
 	_refresh_hud()
 	_refresh_bonus()
 
+	_save_session()
 	if _targets_complete():
 		_set_status("Wave %d cleared! +%d XP" % [_wave, earned])
 		Fx.banner(self, "WAVE %d!" % _wave, VIBRANT_GOLD, VIBRANT_GOLD_DARK)
@@ -690,6 +761,57 @@ func _refresh_bonus() -> void:
 
 func _set_status(s: String) -> void:
 	status_lbl.text = s
+
+# ---------------- session save / load ----------------
+
+func _save_session() -> void:
+	var used_list: Array = []
+	for w: String in _used_words.keys():
+		used_list.append(w)
+	GameState.wfound_save = {
+		"wave": _wave,
+		"score": _score,
+		"pool": _pool_letters,
+		"targets": _targets.duplicate(true),
+		"used_words": used_list,
+		"bonus_words": _bonus_words.duplicate(),
+	}
+	GameState.save()
+
+func _clear_session() -> void:
+	GameState.wfound_save = {}
+	GameState.save()
+
+func _load_session() -> bool:
+	var s: Dictionary = GameState.wfound_save
+	if s.is_empty():
+		return false
+	_wave = int(s.get("wave", 1))
+	_score = int(s.get("score", 0))
+	_pool_letters = s.get("pool", "") as String
+	if _pool_letters.is_empty():
+		return false
+	_targets = []
+	for t: Variant in s.get("targets", []):
+		if t is Dictionary:
+			_targets.append({"count": int(t.count), "len": int(t.len), "done": int(t.done)})
+	if _targets.is_empty():
+		return false
+	_used_words.clear()
+	for w: Variant in s.get("used_words", []):
+		_used_words[w as String] = true
+	_bonus_words.clear()
+	for w: Variant in s.get("bonus_words", []):
+		_bonus_words.append(w as String)
+	_running = true
+	_row2_chain.clear()
+	_build_row1()
+	_build_row2()
+	_build_targets_box()
+	_refresh_bonus()
+	_refresh_hud()
+	_set_status("Wave %d resumed" % _wave)
+	return true
 
 # ---------------- small pip widget ----------------
 

@@ -229,17 +229,17 @@ func _build_ui() -> void:
 	var root := VBoxContainer.new()
 	root.anchor_right = 1.0
 	root.anchor_bottom = 1.0
-	root.offset_left = 10
-	root.offset_top = Chrome.HEADER_H + 6
-	root.offset_right = -10
-	root.offset_bottom = -8
+	root.offset_left = 6
+	root.offset_top = Chrome.HEADER_H + 4
+	root.offset_right = -6
+	root.offset_bottom = -4
 	root.add_theme_constant_override("separation", 6)
 	add_child(root)
 
 	# Combat row: player column | center board | enemy column.
 	var combat := HBoxContainer.new()
 	combat.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	combat.add_theme_constant_override("separation", 10)
+	combat.add_theme_constant_override("separation", 6)
 	combat.add_child(_combatant_column(true))
 	combat.add_child(_center_column())
 	combat.add_child(_combatant_column(false))
@@ -286,15 +286,16 @@ func _build_ui() -> void:
 ## The player column also carries the rainbow streak dots.
 func _combatant_column(is_player: bool) -> VBoxContainer:
 	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(140, 0)
-	col.add_theme_constant_override("separation", 3)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_stretch_ratio = 0.6
+	col.add_theme_constant_override("separation", 2)
 	var accent: Color = SAGE if is_player else HP_PINK
 	var accent_dark: Color = SAGE_DARK if is_player else HP_PINK_DARK
 
 	var combatant := Fx.Combatant.new()
 	combatant.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	combatant.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	combatant.custom_minimum_size = Vector2(0, 104)
+	combatant.custom_minimum_size = Vector2(0, 88)
 	var svg: String = ("res://assets/avatars/%s.svg" % GameState.player_avatar) if is_player else _enemy_avatar_path()
 	combatant.setup(svg, 1.0 if is_player else -1.0, accent)
 	col.add_child(combatant)
@@ -314,7 +315,7 @@ func _combatant_column(is_player: bool) -> VBoxContainer:
 	value_lbl.text = "1000"
 	value_lbl.add_theme_font_size_override("font_size", 15)
 	value_lbl.add_theme_color_override("font_color", Color("#c0b4a6"))
-	value_lbl.custom_minimum_size = Vector2(46, 0)
+	value_lbl.custom_minimum_size = Vector2(40, 0)
 	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var hp_row := HBoxContainer.new()
@@ -365,7 +366,7 @@ func _center_column() -> VBoxContainer:
 	var board_panel := Control.new()
 	board_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	board_panel.custom_minimum_size = Vector2(220, 150)
+	board_panel.custom_minimum_size = Vector2(200, 150)
 	board_bg = Fx.BoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -389,10 +390,10 @@ func _word_pill() -> PanelContainer:
 	wp_sb.set_corner_radius_all(18)
 	wp_sb.set_border_width_all(2)
 	wp_sb.border_color = PINK_PILL_BORDER
-	wp_sb.content_margin_left = 18
-	wp_sb.content_margin_right = 18
-	wp_sb.content_margin_top = 5
-	wp_sb.content_margin_bottom = 6
+	wp_sb.content_margin_left = 14
+	wp_sb.content_margin_right = 14
+	wp_sb.content_margin_top = 3
+	wp_sb.content_margin_bottom = 3
 	wp_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.2)
 	wp_sb.shadow_size = 5
 	wp_sb.shadow_offset = Vector2i(0, 2)
@@ -614,8 +615,8 @@ func _fit_board() -> void:
 	var gs := grid.get_combined_minimum_size()
 	if gs.x <= 0.0 or gs.y <= 0.0:
 		return
-	var avail: Vector2 = board_wrap.size - Vector2(16, 16)
-	var s: float = clampf(minf(avail.x / gs.x, avail.y / gs.y), 0.1, 1.0)
+	var avail: Vector2 = board_wrap.size - Vector2(8, 8)
+	var s: float = clampf(minf(avail.x / gs.x, avail.y / gs.y), 0.1, 1.5)
 	grid.pivot_offset = Vector2.ZERO
 	grid.scale = Vector2(s, s)
 	grid.position = ((board_wrap.size - gs * s) * 0.5).round()
@@ -1555,8 +1556,16 @@ static func _set_orientation_landscape() -> void:
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("try{screen.orientation.lock('landscape')}catch(e){}")
+	elif not OS.has_feature("mobile"):
+		var ws := DisplayServer.window_get_size()
+		if ws.x < ws.y:
+			DisplayServer.window_set_size(Vector2i(ws.y, ws.x))
 
 static func _set_orientation_portrait() -> void:
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("try{screen.orientation.unlock()}catch(e){}")
+	elif not OS.has_feature("mobile"):
+		var ws := DisplayServer.window_get_size()
+		if ws.x > ws.y:
+			DisplayServer.window_set_size(Vector2i(ws.y, ws.x))

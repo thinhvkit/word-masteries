@@ -43,6 +43,9 @@ var wf_session: Dictionary = {
 	"score_earned": 0,
 }
 
+# Word Found: persisted so the player can resume mid-wave.
+var wfound_save: Dictionary = {}
+
 # Word Match: pool + found/possible words, score, time used.
 var wm_session: Dictionary = {
 	"pool": "",
@@ -131,6 +134,7 @@ func save() -> void:
 		"wf_world_idx": wf_world_idx,
 		"wf_world_progress": wf_world_progress,
 		"sound_on": sound_on,
+		"wfound_save": wfound_save,
 	}
 	f.store_string(JSON.stringify(data))
 
@@ -159,6 +163,7 @@ func load_save() -> void:
 	if prog is Array and (prog as Array).size() == 4:
 		wf_world_progress = [int(prog[0]), int(prog[1]), int(prog[2]), int(prog[3])]
 	sound_on = parsed.get("sound_on", true)
+	wfound_save = parsed.get("wfound_save", {})
 	_apply_sound()
 
 func _apply_sound() -> void:

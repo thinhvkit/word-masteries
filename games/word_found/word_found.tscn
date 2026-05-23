@@ -45,7 +45,7 @@ theme_override_font_sizes/font_size = 18
 [node name="TargetsLabel" type="Label" parent="V"]
 layout_mode = 2
 text = "Targets"
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 18
 
 [node name="TargetsBox" type="VBoxContainer" parent="V"]
 layout_mode = 2
@@ -70,7 +70,7 @@ theme_override_constants/separation = 4
 [node name="Row1Label" type="Label" parent="V"]
 layout_mode = 2
 text = "Letters"
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 16
 
 [node name="Row1" type="GridContainer" parent="V"]
 layout_mode = 2
@@ -82,12 +82,12 @@ theme_override_constants/v_separation = 6
 layout_mode = 2
 text = "Bonus words: —"
 autowrap_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 16
 
 [node name="Status" type="Label" parent="V"]
 layout_mode = 2
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 17
 
 [node name="Actions" type="HBoxContainer" parent="V"]
 layout_mode = 2
