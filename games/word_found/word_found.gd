@@ -543,7 +543,7 @@ func _build_row1() -> void:
 	for c in row1_grid.get_children():
 		c.queue_free()
 	_row1_tiles.clear()
-	row1_grid.columns = mini(_pool_letters.length(), 7)
+	row1_grid.columns = mini(_pool_letters.length(), 6)
 	var letters := []
 	for ch in _pool_letters:
 		letters.append(ch)

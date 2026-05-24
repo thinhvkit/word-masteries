@@ -12,7 +12,7 @@ signal tile_picked_fx(tile: WFoundTile, color: Color)
 
 enum State { AVAILABLE, MOVED }
 
-const SIZE := 50.0
+const SIZE := 58.0
 const RADIUS := 10.0
 
 const GREEN_AVAIL_TOP := Color("#5ec46e")
