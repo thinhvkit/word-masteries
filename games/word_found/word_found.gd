@@ -215,6 +215,7 @@ func _apply_design() -> void:
 	pill_sb.content_margin_top = 14
 	pill_sb.content_margin_bottom = 14
 	_row2_pill.add_theme_stylebox_override("panel", pill_sb)
+	_row2_pill.custom_minimum_size = Vector2(0, 52)
 	v.add_child(_row2_pill)
 	v.move_child(_row2_pill, row2_node.get_index())
 	row2_node.reparent(_row2_pill, false)
