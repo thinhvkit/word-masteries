@@ -1,8 +1,8 @@
 class_name WFoundTile
 extends Control
-## Word Found letter tile — forest green dungeon theme.
-## - AVAILABLE: bright green gradient, white text, green border.
-## - MOVED:     darker olive green, selection order number in top-right.
+## Word Found letter tile — per-letter color tiers matching Word Fight.
+## - AVAILABLE: vibrant tier gradient (vowel/common/uncommon/rare).
+## - MOVED:     darkened tier, selection order badge.
 
 const Fx := preload("res://games/word_fight/fx.gd")
 const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
@@ -15,13 +15,7 @@ enum State { AVAILABLE, MOVED }
 const SIZE := 58.0
 const RADIUS := 10.0
 
-const GREEN_AVAIL_TOP := Color("#5ec46e")
-const GREEN_AVAIL_BOT := Color("#2e8a3e")
-const GREEN_AVAIL_BORDER := Color("#90e8a0")
-
-const GREEN_MOVED_TOP := Color("#2a5028")
-const GREEN_MOVED_BOT := Color("#1a3818")
-const GREEN_MOVED_BORDER := Color("#4a7a40")
+const MOVED_DARKEN := 0.45
 
 @export var letter: String = "A" :
 	set(v):
@@ -67,7 +61,8 @@ func _handle_state_change(prev: int, now: int) -> void:
 		var tw := create_tween()
 		tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(self, "scale", Vector2(1.06, 1.06), 0.14)
-		tile_picked_fx.emit(self, GREEN_AVAIL_BORDER)
+		var g := Fx.gradient_for_letter(letter)
+		tile_picked_fx.emit(self, (g[0] as Color).lightened(0.3))
 	elif now == State.AVAILABLE:
 		selection_index = -1
 		var tw := create_tween()
@@ -75,47 +70,46 @@ func _handle_state_change(prev: int, now: int) -> void:
 
 func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO, size)
-	var top: Color
-	var bot: Color
-	var border_col: Color
+	var g := Fx.gradient_for_letter(letter)
+	var top: Color = g[0]
+	var bot: Color = g[1]
+	var ink: Color = g[2]
+	var border_col: Color = (top as Color).lightened(0.3)
 	if state == State.MOVED:
-		top = GREEN_MOVED_TOP
-		bot = GREEN_MOVED_BOT
-		border_col = GREEN_MOVED_BORDER
-	else:
-		top = GREEN_AVAIL_TOP
-		bot = GREEN_AVAIL_BOT
-		border_col = GREEN_AVAIL_BORDER
+		top = top.darkened(MOVED_DARKEN)
+		bot = bot.darkened(MOVED_DARKEN)
+		ink = Color(ink.r, ink.g, ink.b, 0.5)
+		border_col = border_col.darkened(0.3)
 
 	# Drop shadow (colored).
 	_round_rect(Rect2(Vector2(0, 4), size), Color(bot.r * 0.3, bot.g * 0.3, bot.b * 0.3, 0.6), RADIUS)
 	# Gradient fill.
 	_round_rect_gradient(rect, top, bot, RADIUS)
-	# Glossy sheen — arc highlights instead of rects to avoid corner artifacts.
+	# Glossy sheen arcs.
 	var cx := size.x * 0.5
-	draw_arc(Vector2(cx, 6), size.x * 0.38, PI * 1.05, PI * 1.95, 24, Color(1, 1, 1, 0.25), 5.0, true)
-	draw_arc(Vector2(cx, 8), size.x * 0.28, PI * 1.15, PI * 1.85, 20, Color(1, 1, 1, 0.12), 3.0, true)
+	draw_arc(Vector2(cx, 6), size.x * 0.38, PI * 1.05, PI * 1.95, 24, Color(1, 1, 1, 0.28), 5.0, true)
+	draw_arc(Vector2(cx, 8), size.x * 0.28, PI * 1.15, PI * 1.85, 20, Color(1, 1, 1, 0.14), 3.0, true)
 	# Bottom 3D edge.
-	draw_arc(Vector2(cx, size.y - 2), size.x * 0.35, 0.1, PI - 0.1, 20, Color(0, 0, 0, 0.18), 2.0, true)
+	draw_arc(Vector2(cx, size.y - 2), size.x * 0.35, 0.1, PI - 0.1, 20, Color(0, 0, 0, 0.2), 2.0, true)
 	# Highlight dot.
-	draw_circle(Vector2(RADIUS + 2, RADIUS), 2.5, Color(1, 1, 1, 0.35))
+	draw_circle(Vector2(RADIUS + 2, RADIUS), 2.5, Color(1, 1, 1, 0.4))
 
 	# Border.
 	_round_rect_outline(rect, border_col, RADIUS, 2.5)
 	if state == State.AVAILABLE:
 		_round_rect_outline(rect.grow(1), Color(border_col.r, border_col.g, border_col.b, 0.2), RADIUS + 1, 1.0)
 	elif state == State.MOVED:
-		_round_rect_outline(rect.grow(2), Color(GREEN_MOVED_BORDER.r, GREEN_MOVED_BORDER.g, GREEN_MOVED_BORDER.b, 0.4), RADIUS + 2, 1.5)
+		_round_rect_outline(rect.grow(2), Color(border_col.r, border_col.g, border_col.b, 0.3), RADIUS + 2, 1.5)
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 26
+	var fs := 28
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(size.x * 0.5 - ts.x * 0.5, (size.y + ascent - descent) * 0.5)
 	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.5))
-	draw_string(f, base + Vector2(0, -1), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(1, 1, 1, 0.95))
+	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color.WHITE)
 
 	# Selection order badge (top-right).
 	if state == State.MOVED and selection_index >= 0:
