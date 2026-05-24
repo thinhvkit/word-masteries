@@ -1,8 +1,8 @@
 class_name WFoundTile
 extends Control
-## Word Found letter tile — per-letter color tiers matching Word Fight.
-## - AVAILABLE: vibrant tier gradient (vowel/common/uncommon/rare).
-## - MOVED:     darkened tier, selection order badge.
+## Word Found letter — candy-style glossy circle matching Word Match.
+## - AVAILABLE: bright candy gradient circle per letter tier.
+## - MOVED:     golden selected candy, selection order badge.
 
 const Fx := preload("res://games/word_fight/fx.gd")
 const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
@@ -13,9 +13,17 @@ signal tile_picked_fx(tile: WFoundTile, color: Color)
 enum State { AVAILABLE, MOVED }
 
 const SIZE := 58.0
-const RADIUS := 10.0
 
-const MOVED_DARKEN := 0.45
+const _CANDY_TIERS := [
+	{"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FF9DB5"), "ink": Color.WHITE},
+	{"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#8DD6FF"), "ink": Color.WHITE},
+	{"top": Color("#B07AFF"), "bot": Color("#7030D4"), "outline": Color("#D0ACFF"), "ink": Color.WHITE},
+	{"top": Color("#7AE86A"), "bot": Color("#30A830"), "outline": Color("#A8F49E"), "ink": Color.WHITE},
+]
+
+const _CANDY_MOVED := {
+	"top": Color("#FFD740"), "bot": Color("#FFB300"), "outline": Color("#FFE57F"), "ink": Color.WHITE,
+}
 
 @export var letter: String = "A" :
 	set(v):
@@ -60,115 +68,82 @@ func _handle_state_change(prev: int, now: int) -> void:
 	if now == State.MOVED and prev != State.MOVED:
 		var tw := create_tween()
 		tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(self, "scale", Vector2(1.06, 1.06), 0.14)
-		var g := Fx.gradient_for_letter(letter)
-		tile_picked_fx.emit(self, (g[0] as Color).lightened(0.3))
+		tw.tween_property(self, "scale", Vector2(1.08, 1.08), 0.14)
+		var candy := _candy_for_letter()
+		tile_picked_fx.emit(self, candy.outline)
 	elif now == State.AVAILABLE:
 		selection_index = -1
 		var tw := create_tween()
 		tw.tween_property(self, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
+func _candy_for_letter() -> Dictionary:
+	var tier := Fx.tier_for_letter(letter)
+	return _CANDY_TIERS[clampi(tier, 0, _CANDY_TIERS.size() - 1)]
+
 func _draw() -> void:
-	var rect := Rect2(Vector2.ZERO, size)
-	var g := Fx.gradient_for_letter(letter)
-	var top: Color = g[0]
-	var bot: Color = g[1]
-	var ink: Color = g[2]
-	var border_col: Color = (top as Color).lightened(0.3)
+	var center := size * 0.5
+	var r := SIZE * 0.5 - 2.0
+	var candy: Dictionary
 	if state == State.MOVED:
-		top = top.darkened(MOVED_DARKEN)
-		bot = bot.darkened(MOVED_DARKEN)
-		ink = Color(ink.r, ink.g, ink.b, 0.5)
-		border_col = border_col.darkened(0.3)
+		candy = _CANDY_MOVED
+	else:
+		candy = _candy_for_letter()
 
 	# Drop shadow (colored).
-	_round_rect(Rect2(Vector2(0, 4), size), Color(bot.r * 0.3, bot.g * 0.3, bot.b * 0.3, 0.6), RADIUS)
-	# Gradient fill.
-	_round_rect_gradient(rect, top, bot, RADIUS)
-	# Glossy sheen arcs.
-	var cx := size.x * 0.5
-	draw_arc(Vector2(cx, 6), size.x * 0.38, PI * 1.05, PI * 1.95, 24, Color(1, 1, 1, 0.28), 5.0, true)
-	draw_arc(Vector2(cx, 8), size.x * 0.28, PI * 1.15, PI * 1.85, 20, Color(1, 1, 1, 0.14), 3.0, true)
-	# Bottom 3D edge.
-	draw_arc(Vector2(cx, size.y - 2), size.x * 0.35, 0.1, PI - 0.1, 20, Color(0, 0, 0, 0.2), 2.0, true)
-	# Highlight dot.
-	draw_circle(Vector2(RADIUS + 2, RADIUS), 2.5, Color(1, 1, 1, 0.4))
+	draw_circle(center + Vector2(0, 4), r, Color(candy.bot.r, candy.bot.g, candy.bot.b, 0.35))
 
-	# Border.
-	_round_rect_outline(rect, border_col, RADIUS, 2.5)
-	if state == State.AVAILABLE:
-		_round_rect_outline(rect.grow(1), Color(border_col.r, border_col.g, border_col.b, 0.2), RADIUS + 1, 1.0)
-	elif state == State.MOVED:
-		_round_rect_outline(rect.grow(2), Color(border_col.r, border_col.g, border_col.b, 0.3), RADIUS + 2, 1.5)
+	# Main gradient fill.
+	_draw_gradient_circle(center, r, candy.top, candy.bot)
+
+	# Glossy candy sheen.
+	draw_arc(center + Vector2(0, -3), r - 8, PI * 1.1, PI * 1.9, 32, Color(1, 1, 1, 0.6), 6.0, true)
+	draw_arc(center + Vector2(0, -1), r - 13, PI * 1.2, PI * 1.8, 24, Color(1, 1, 1, 0.3), 4.0, true)
+
+	# Highlight dots (candy reflection).
+	draw_circle(center + Vector2(-r * 0.28, -r * 0.32), r * 0.10, Color(1, 1, 1, 0.5))
+	draw_circle(center + Vector2(-r * 0.18, -r * 0.42), r * 0.05, Color(1, 1, 1, 0.65))
+
+	# Colored outline.
+	if state == State.MOVED:
+		draw_arc(center, r, 0, TAU, 48, candy.outline, 3.5, true)
+		draw_arc(center, r + 4, 0, TAU, 48, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.4), 2.5, true)
+		draw_arc(center, r + 7, 0, TAU, 48, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.12), 2.0, true)
+	else:
+		draw_arc(center, r, 0, TAU, 48, candy.outline, 2.5, true)
+		draw_arc(center, r + 3, 0, TAU, 48, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.15), 1.5, true)
+
+	# Bottom edge shadow.
+	draw_arc(center, r - 1, 0.15, PI - 0.15, 24, Color(0, 0, 0, 0.16), 2.5, true)
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 28
+	var fs := 30
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
-	var base := Vector2(size.x * 0.5 - ts.x * 0.5, (size.y + ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.5))
-	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color.WHITE)
+	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5)
+	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
+	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, candy.ink)
 
 	# Selection order badge (top-right).
 	if state == State.MOVED and selection_index >= 0:
 		var badge_r := 8.0
-		var badge_pos := Vector2(size.x - badge_r - 3, badge_r + 3)
+		var badge_pos := Vector2(size.x - badge_r - 2, badge_r + 2)
 		draw_circle(badge_pos, badge_r + 1, Color(0, 0, 0, 0.3))
-		draw_circle(badge_pos, badge_r, Color("#ffd027"))
+		draw_circle(badge_pos, badge_r, Color("#ff3aa8"))
 		var num_str := str(selection_index + 1)
 		var nfs := 10
 		var nts := f.get_string_size(num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs)
-		draw_string(f, badge_pos + Vector2(-nts.x * 0.5, f.get_ascent(nfs) * 0.5 - 1), num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color("#5a3a00"))
+		draw_string(f, badge_pos + Vector2(-nts.x * 0.5, f.get_ascent(nfs) * 0.5 - 1), num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color.WHITE)
 
-# --------- drawing helpers ---------
-func _round_rect(rect: Rect2, color: Color, radius: float) -> void:
-	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-	draw_rect(Rect2(rect.position + Vector2(r, 0), Vector2(rect.size.x - 2*r, rect.size.y)), color)
-	draw_rect(Rect2(rect.position + Vector2(0, r), Vector2(rect.size.x, rect.size.y - 2*r)), color)
-	draw_circle(rect.position + Vector2(r, r), r, color)
-	draw_circle(rect.position + Vector2(rect.size.x - r, r), r, color)
-	draw_circle(rect.position + Vector2(r, rect.size.y - r), r, color)
-	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, color)
-
-func _round_rect_gradient(rect: Rect2, top: Color, bot: Color, radius: float) -> void:
+func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) -> void:
 	var bands := 20
-	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
 	for i in bands:
 		var t0: float = float(i) / float(bands)
 		var t1: float = float(i + 1) / float(bands)
-		var c := top.lerp(bot, (t0 + t1) * 0.5)
-		var y0 := rect.position.y + rect.size.y * t0
-		var y1 := rect.position.y + rect.size.y * t1
-		var inset_top: float = 0.0
-		var inset_bot: float = 0.0
-		if y0 < rect.position.y + r:
-			inset_top = r - (y0 - rect.position.y)
-		if y1 > rect.position.y + rect.size.y - r:
-			inset_bot = r - ((rect.position.y + rect.size.y) - y1)
-		var inset: float = maxf(clampf(inset_top, 0.0, r), clampf(inset_bot, 0.0, r))
-		var chord: float = 0.0
-		if inset > 0:
-			chord = r - sqrt(maxf(r * r - (r - inset) * (r - inset), 0.0))
-		draw_rect(Rect2(Vector2(rect.position.x + chord, y0),
-			Vector2(rect.size.x - chord * 2, y1 - y0)), c)
-	var t_top: float = r / rect.size.y
-	var t_bot: float = (rect.size.y - r) / rect.size.y
-	var c_top := top.lerp(bot, t_top)
-	var c_bot := top.lerp(bot, t_bot)
-	draw_circle(rect.position + Vector2(r, r), r, c_top)
-	draw_circle(rect.position + Vector2(rect.size.x - r, r), r, c_top)
-	draw_circle(rect.position + Vector2(r, rect.size.y - r), r, c_bot)
-	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, c_bot)
-
-func _round_rect_outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
-	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
-	draw_line(rect.position + Vector2(r, 0), rect.position + Vector2(rect.size.x - r, 0), color, width)
-	draw_line(rect.position + Vector2(r, rect.size.y), rect.position + Vector2(rect.size.x - r, rect.size.y), color, width)
-	draw_line(rect.position + Vector2(0, r), rect.position + Vector2(0, rect.size.y - r), color, width)
-	draw_line(rect.position + Vector2(rect.size.x, r), rect.position + Vector2(rect.size.x, rect.size.y - r), color, width)
-	draw_arc(rect.position + Vector2(r, r), r, PI, PI * 1.5, 16, color, width)
-	draw_arc(rect.position + Vector2(rect.size.x - r, r), r, -PI * 0.5, 0, 16, color, width)
-	draw_arc(rect.position + Vector2(r, rect.size.y - r), r, PI * 0.5, PI, 16, color, width)
-	draw_arc(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, 0, PI * 0.5, 16, color, width)
+		var c: Color = top.lerp(bot, (t0 + t1) * 0.5)
+		var y0: float = center.y - r + (2 * r) * t0
+		var y1: float = center.y - r + (2 * r) * t1
+		var mid: float = (y0 + y1) * 0.5 - center.y
+		var hw: float = sqrt(maxf(r * r - mid * mid, 0.0))
+		draw_rect(Rect2(Vector2(center.x - hw, y0), Vector2(hw * 2, y1 - y0)), c)
