@@ -12,8 +12,8 @@ signal tile_picked_fx(tile: WFoundTile, color: Color)
 
 enum State { AVAILABLE, MOVED }
 
-const SIZE := 58.0
-const RADIUS := 14.0
+const SIZE := 50.0
+const RADIUS := 12.0
 
 const GREEN_AVAIL_TOP := Color("#5ec46e")
 const GREEN_AVAIL_BOT := Color("#2e8a3e")
@@ -87,37 +87,48 @@ func _draw() -> void:
 		bot = GREEN_AVAIL_BOT
 		border_col = GREEN_AVAIL_BORDER
 
-	# Drop shadow.
-	_round_rect(Rect2(Vector2(0, 5), size), Color(0, 0, 0, 0.55), RADIUS)
+	# Drop shadow (colored).
+	_round_rect(Rect2(Vector2(0, 4), size), Color(bot.r * 0.3, bot.g * 0.3, bot.b * 0.3, 0.6), RADIUS)
 	# Gradient fill.
 	_round_rect_gradient(rect, top, bot, RADIUS)
-	# Top sheen.
-	var sheen_rect := Rect2(rect.position + Vector2(3, 3), Vector2(rect.size.x - 6, rect.size.y * 0.35))
-	_round_rect(sheen_rect, Color(1, 1, 1, 0.15), RADIUS - 3)
-	# Bottom edge for 3D depth.
-	_round_rect(Rect2(Vector2(0, size.y - 4), Vector2(size.x, 4)), Color(0, 0, 0, 0.18), RADIUS)
+	# Glossy sheen — bright highlight band near top.
+	var sheen_rect := Rect2(rect.position + Vector2(4, 3), Vector2(rect.size.x - 8, rect.size.y * 0.32))
+	_round_rect(sheen_rect, Color(1, 1, 1, 0.22), RADIUS - 4)
+	# Secondary inner sheen.
+	var sheen2 := Rect2(rect.position + Vector2(6, 4), Vector2(rect.size.x - 12, rect.size.y * 0.18))
+	_round_rect(sheen2, Color(1, 1, 1, 0.12), RADIUS - 5)
+	# Bottom 3D edge.
+	_round_rect(Rect2(Vector2(2, size.y - 3), Vector2(size.x - 4, 3)), Color(0, 0, 0, 0.22), RADIUS - 2)
+	# Highlight dot (candy reflection).
+	draw_circle(Vector2(RADIUS + 2, RADIUS + 1), 3.0, Color(1, 1, 1, 0.35))
 
 	# Border.
-	_round_rect_outline(rect, border_col, RADIUS, 3.0)
-	if state == State.MOVED:
-		_round_rect_outline(rect.grow(2), Color(GREEN_MOVED_BORDER.r, GREEN_MOVED_BORDER.g, GREEN_MOVED_BORDER.b, 0.35), RADIUS + 2, 1.5)
+	_round_rect_outline(rect, border_col, RADIUS, 2.5)
+	if state == State.AVAILABLE:
+		_round_rect_outline(rect.grow(1), Color(border_col.r, border_col.g, border_col.b, 0.2), RADIUS + 1, 1.0)
+	elif state == State.MOVED:
+		_round_rect_outline(rect.grow(2), Color(GREEN_MOVED_BORDER.r, GREEN_MOVED_BORDER.g, GREEN_MOVED_BORDER.b, 0.4), RADIUS + 2, 1.5)
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 30
+	var fs := 26
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(size.x * 0.5 - ts.x * 0.5, (size.y + ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 3), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.5))
-	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color.WHITE)
+	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.5))
+	draw_string(f, base + Vector2(0, -1), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(1, 1, 1, 0.95))
 
-	# Selection order number (top-right).
+	# Selection order badge (top-right).
 	if state == State.MOVED and selection_index >= 0:
+		var badge_r := 8.0
+		var badge_pos := Vector2(size.x - badge_r - 3, badge_r + 3)
+		draw_circle(badge_pos, badge_r + 1, Color(0, 0, 0, 0.3))
+		draw_circle(badge_pos, badge_r, Color("#ffd027"))
 		var num_str := str(selection_index + 1)
-		var nfs := 11
-		var num_pos := Vector2(size.x - 12, 14)
-		draw_string(f, num_pos, num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color(1, 1, 1, 0.7))
+		var nfs := 10
+		var nts := f.get_string_size(num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs)
+		draw_string(f, badge_pos + Vector2(-nts.x * 0.5, f.get_ascent(nfs) * 0.5 - 1), num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color("#5a3a00"))
 
 # --------- drawing helpers ---------
 func _round_rect(rect: Rect2, color: Color, radius: float) -> void:

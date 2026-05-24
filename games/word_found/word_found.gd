@@ -327,20 +327,17 @@ func _wrap_in_dark_card(nodes: Array, parent: Control) -> void:
 
 func _wrap_row1_with_bg(grid_node: GridContainer, parent: Control) -> void:
 	var idx := grid_node.get_index()
-	var wrap := CenterContainer.new()
+	var wrap := Control.new()
 	wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(wrap)
 	parent.move_child(wrap, idx)
-	var holder := Control.new()
-	wrap.add_child(holder)
 	_row1_bg = Fx.BoardBG.new()
 	_row1_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	holder.add_child(_row1_bg)
-	grid_node.reparent(holder, false)
-	grid_node.position = Vector2(12, 12)
-	_row1_stack = holder
+	wrap.add_child(_row1_bg)
+	grid_node.reparent(wrap, false)
+	_row1_stack = wrap
 	_row1_card = wrap
-	holder.resized.connect(_fit_row1)
+	wrap.resized.connect(_fit_row1)
 	grid_node.resized.connect(_fit_row1)
 	_fit_row1.call_deferred()
 
@@ -350,12 +347,15 @@ func _fit_row1() -> void:
 	var gs := row1_grid.get_combined_minimum_size()
 	if gs.x <= 0.0 or gs.y <= 0.0:
 		return
-	var padded := gs + Vector2(24, 24)
-	_row1_stack.custom_minimum_size = padded
+	var wrap_w := _row1_stack.size.x
+	if wrap_w <= 0.0:
+		wrap_w = gs.x + 24.0
+	var padded_h := gs.y + 24.0
+	_row1_stack.custom_minimum_size = Vector2(0, padded_h)
 	_row1_bg.position = Vector2.ZERO
-	_row1_bg.size = padded
-	row1_grid.scale = Vector2(1, 1)
-	row1_grid.position = Vector2(12, 12)
+	_row1_bg.size = Vector2(wrap_w, padded_h)
+	var grid_x := (wrap_w - gs.x) * 0.5
+	row1_grid.position = Vector2(grid_x, 12)
 
 func _wrap_in_chip(lbl: Label, bg: Color) -> void:
 	var parent := lbl.get_parent() as Control
@@ -541,7 +541,7 @@ func _build_row1() -> void:
 	for c in row1_grid.get_children():
 		c.queue_free()
 	_row1_tiles.clear()
-	row1_grid.columns = mini(_pool_letters.length(), 6)
+	row1_grid.columns = mini(_pool_letters.length(), 7)
 	var letters := []
 	for ch in _pool_letters:
 		letters.append(ch)
