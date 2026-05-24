@@ -15,13 +15,13 @@ enum State { AVAILABLE, MOVED }
 const SIZE := 58.0
 const RADIUS := 14.0
 
-const GREEN_AVAIL_TOP := Color("#4a9e5a")
-const GREEN_AVAIL_BOT := Color("#357a42")
-const GREEN_AVAIL_BORDER := Color("#6bc47a")
+const GREEN_AVAIL_TOP := Color("#5ec46e")
+const GREEN_AVAIL_BOT := Color("#2e8a3e")
+const GREEN_AVAIL_BORDER := Color("#90e8a0")
 
-const GREEN_MOVED_TOP := Color("#3a6830")
-const GREEN_MOVED_BOT := Color("#2a4e22")
-const GREEN_MOVED_BORDER := Color("#5a8a4a")
+const GREEN_MOVED_TOP := Color("#2a5028")
+const GREEN_MOVED_BOT := Color("#1a3818")
+const GREEN_MOVED_BORDER := Color("#4a7a40")
 
 @export var letter: String = "A" :
 	set(v):
@@ -88,26 +88,28 @@ func _draw() -> void:
 		border_col = GREEN_AVAIL_BORDER
 
 	# Drop shadow.
-	_round_rect(Rect2(Vector2(0, 4), size), Color(0, 0, 0, 0.45), RADIUS)
+	_round_rect(Rect2(Vector2(0, 5), size), Color(0, 0, 0, 0.55), RADIUS)
 	# Gradient fill.
 	_round_rect_gradient(rect, top, bot, RADIUS)
 	# Top sheen.
 	var sheen_rect := Rect2(rect.position + Vector2(3, 3), Vector2(rect.size.x - 6, rect.size.y * 0.35))
-	_round_rect(sheen_rect, Color(1, 1, 1, 0.10), RADIUS - 3)
+	_round_rect(sheen_rect, Color(1, 1, 1, 0.15), RADIUS - 3)
+	# Bottom edge for 3D depth.
+	_round_rect(Rect2(Vector2(0, size.y - 4), Vector2(size.x, 4)), Color(0, 0, 0, 0.18), RADIUS)
 
 	# Border.
-	_round_rect_outline(rect, border_col, RADIUS, 2.5)
+	_round_rect_outline(rect, border_col, RADIUS, 3.0)
 	if state == State.MOVED:
-		_round_rect_outline(rect.grow(2), Color(GREEN_MOVED_BORDER.r, GREEN_MOVED_BORDER.g, GREEN_MOVED_BORDER.b, 0.3), RADIUS + 2, 1.5)
+		_round_rect_outline(rect.grow(2), Color(GREEN_MOVED_BORDER.r, GREEN_MOVED_BORDER.g, GREEN_MOVED_BORDER.b, 0.35), RADIUS + 2, 1.5)
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 26
+	var fs := 30
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(size.x * 0.5 - ts.x * 0.5, (size.y + ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
+	draw_string(f, base + Vector2(1, 3), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.5))
 	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color.WHITE)
 
 	# Selection order number (top-right).
