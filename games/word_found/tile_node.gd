@@ -1,5 +1,5 @@
 class_name WFoundTile
-extends Control
+extends Button
 ## Word Found letter — candy-style glossy circle matching Word Match.
 ## - AVAILABLE: bright candy gradient circle per letter tier.
 ## - MOVED:     golden selected candy, selection order badge.
@@ -7,7 +7,7 @@ extends Control
 const Fx := preload("res://games/word_fight/fx.gd")
 const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 
-signal pressed(tile: WFoundTile)
+signal tile_pressed(tile: WFoundTile)
 signal tile_picked_fx(tile: WFoundTile, color: Color)
 
 enum State { AVAILABLE, MOVED }
@@ -46,13 +46,11 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
 	size = Vector2(SIZE, SIZE)
 	pivot_offset = size * 0.5
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	flat = true
+	focus_mode = Control.FOCUS_NONE
 
-func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		pressed.emit(self)
-	elif event is InputEventScreenTouch and event.pressed:
-		pressed.emit(self)
+func _pressed() -> void:
+	tile_pressed.emit(self)
 
 func play_pop_in(delay: float = 0.0) -> void:
 	scale = Vector2(0.2, 0.2)

@@ -552,7 +552,7 @@ func _build_row1() -> void:
 		var ch: String = letters[i]
 		var t: WFoundTile = Tile.new()
 		t.letter = ch
-		t.pressed.connect(_on_row1_tile_pressed)
+		t.tile_pressed.connect(_on_row1_tile_pressed)
 		t.tile_picked_fx.connect(_on_tile_picked_fx)
 		row1_grid.add_child(t)
 		_row1_tiles.append(t)
