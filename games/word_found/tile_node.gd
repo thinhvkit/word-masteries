@@ -12,7 +12,7 @@ signal tile_picked_fx(tile: WFoundTile, color: Color)
 
 enum State { AVAILABLE, MOVED }
 
-const SIZE := 58.0
+const SIZE := 87.0
 
 const _CANDY_TIERS := [
 	{"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FF9DB5"), "ink": Color.WHITE},
@@ -117,7 +117,7 @@ func _draw() -> void:
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 30
+	var fs := 42
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)

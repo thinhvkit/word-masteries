@@ -74,7 +74,7 @@ theme_override_font_sizes/font_size = 16
 
 [node name="Row1" type="GridContainer" parent="V"]
 layout_mode = 2
-columns = 6
+columns = 4
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 4
 
