@@ -333,6 +333,7 @@ func _wrap_row1_with_bg(grid_node: GridContainer, parent: Control) -> void:
 	parent.add_child(wrap)
 	parent.move_child(wrap, idx)
 	_row1_bg = Fx.BoardBG.new()
+	_row1_bg.radius = 16.0
 	_row1_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wrap.add_child(_row1_bg)
 	grid_node.reparent(wrap, false)
