@@ -467,14 +467,14 @@ func _end_drag() -> void:
 func _try_add_letter_at(gpos: Vector2) -> void:
 	for n in _letters:
 		if n.contains_point(gpos):
-			# Drag back onto the previous letter → pop the most-recent off
-			# the chain (revert). Touching the current head is a no-op.
-			if _chain.size() >= 2 and _chain[-2] == n:
-				var popped: WMLetter = _chain.pop_back()
-				if popped != null and not _chain.has(popped):
+			var idx := _chain.find(n)
+			if idx != -1:
+				if idx == _chain.size() - 1:
+					return
+				# Trim chain: deselect everything after this letter.
+				while _chain.size() > idx + 1:
+					var popped: WMLetter = _chain.pop_back()
 					popped.selected = false
-				return
-			if _chain.size() > 0 and _chain[-1] == n:
 				return
 			_chain.append(n)
 			n.selected = true
