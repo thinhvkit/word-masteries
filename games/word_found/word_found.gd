@@ -215,7 +215,7 @@ func _apply_design() -> void:
 	pill_sb.content_margin_top = 14
 	pill_sb.content_margin_bottom = 14
 	_row2_pill.add_theme_stylebox_override("panel", pill_sb)
-	_row2_pill.custom_minimum_size = Vector2(0, 52)
+	_row2_pill.custom_minimum_size = Vector2(0, 60)
 	v.add_child(_row2_pill)
 	v.move_child(_row2_pill, row2_node.get_index())
 	row2_node.reparent(_row2_pill, false)
@@ -612,13 +612,12 @@ func _reindex_chain() -> void:
 func _refresh_row2_label() -> void:
 	var word := _chain_word()
 	row2_holder.visible = false
+	row2_label.visible = true
 	if word.is_empty():
-		row2_label.visible = true
 		row2_label.text = "Tap letters to spell a word"
-		row2_label.add_theme_font_size_override("font_size", 14)
-		row2_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
+		row2_label.add_theme_font_size_override("font_size", 28)
+		row2_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.2))
 	else:
-		row2_label.visible = true
 		row2_label.text = _spaced_word(word)
 		row2_label.add_theme_font_size_override("font_size", 28)
 		row2_label.add_theme_color_override("font_color", Color.WHITE)
