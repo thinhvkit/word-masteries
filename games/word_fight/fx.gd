@@ -425,32 +425,48 @@ static func hit_flash(node: CanvasItem, tint: Color = Color(1.9, 1.25, 1.25)) ->
 	tw.tween_property(node, "modulate", tint, 0.06)
 	tw.tween_property(node, "modulate", Color(1, 1, 1, 1), 0.24)
 
-# ---------- shared forest-cozy backdrop ----------
-## Warm dark-wood planks with mossy grain, soft green ambient glow,
-## and organic knot/vine details. `Fx.BoardBG.new()` then add_child.
+static func set_landscape() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("try{screen.orientation.lock('landscape')}catch(e){}")
+	elif not OS.has_feature("mobile"):
+		var ws := DisplayServer.window_get_size()
+		if ws.x < ws.y:
+			DisplayServer.window_set_size(Vector2i(ws.y, ws.x))
+
+static func set_portrait() -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("try{screen.orientation.unlock()}catch(e){}")
+	elif not OS.has_feature("mobile"):
+		var ws := DisplayServer.window_get_size()
+		if ws.x > ws.y:
+			DisplayServer.window_set_size(Vector2i(ws.y, ws.x))
+
+# ---------- shared mono backdrop ----------
+## Clean gradient panel with subtle glow, thin border.
+## `Fx.BoardBG.new()` then add_child.
 class BoardBG extends Control:
 	var radius: float = 0.0
 
-	var glow_color := Color(0.35, 0.75, 0.40, 0.22)
-	var wood_light := Color("#3a3228")
-	var wood_dark  := Color("#221c14")
-	var grain_color := Color(0.45, 0.38, 0.28, 0.35)
-	var moss_color  := Color(0.35, 0.55, 0.30, 0.18)
+	var glow_color := Color(1, 1, 1, 0.08)
+	var bg_top := Color("#2e2e2e")
+	var bg_bot := Color("#1a1a1a")
+	var border_color := Color(1, 1, 1, 0.12)
 
-	const _GLOW_THEMES := [
-		{"glow": Color(0.35, 0.75, 0.40, 0.22), "light": Color("#3a3228"), "dark": Color("#221c14"), "grain": Color(0.45, 0.38, 0.28, 0.35), "moss": Color(0.35, 0.55, 0.30, 0.18)},
-		{"glow": Color(0.85, 0.70, 0.30, 0.25), "light": Color("#3a3020"), "dark": Color("#241e10"), "grain": Color(0.55, 0.45, 0.25, 0.35), "moss": Color(0.50, 0.45, 0.20, 0.15)},
-		{"glow": Color(0.90, 0.50, 0.20, 0.25), "light": Color("#3e2e1e"), "dark": Color("#28180c"), "grain": Color(0.55, 0.35, 0.18, 0.35), "moss": Color(0.50, 0.30, 0.15, 0.12)},
-		{"glow": Color(0.75, 0.20, 0.25, 0.25), "light": Color("#38222a"), "dark": Color("#22121a"), "grain": Color(0.50, 0.25, 0.28, 0.35), "moss": Color(0.45, 0.20, 0.22, 0.12)},
+	const _THEMES := [
+		{"glow": Color(1, 1, 1, 0.08), "top": Color("#2e2e2e"), "bot": Color("#1a1a1a"), "border": Color(1, 1, 1, 0.12)},
+		{"glow": Color(0.95, 0.88, 0.72, 0.10), "top": Color("#332e28"), "bot": Color("#1e1a14"), "border": Color(0.85, 0.75, 0.55, 0.14)},
+		{"glow": Color(0.95, 0.65, 0.35, 0.10), "top": Color("#352a22"), "bot": Color("#201410"), "border": Color(0.90, 0.60, 0.30, 0.14)},
+		{"glow": Color(0.85, 0.55, 0.60, 0.10), "top": Color("#322428"), "bot": Color("#1e1216"), "border": Color(0.80, 0.50, 0.55, 0.14)},
 	]
 
 	func set_world(world_idx: int) -> void:
-		var t: Dictionary = _GLOW_THEMES[clampi(world_idx, 0, _GLOW_THEMES.size() - 1)]
+		var t: Dictionary = _THEMES[clampi(world_idx, 0, _THEMES.size() - 1)]
 		glow_color = t.glow
-		wood_light = t.light
-		wood_dark  = t.dark
-		grain_color = t.grain
-		moss_color  = t.moss
+		bg_top = t.top
+		bg_bot = t.bot
+		border_color = t.border
 		queue_redraw()
 
 	func _ready() -> void:
@@ -458,93 +474,38 @@ class BoardBG extends Control:
 
 	func _draw() -> void:
 		var r: float = minf(radius, minf(size.x, size.y) * 0.5)
-		var gc := Color(glow_color.r, glow_color.g, glow_color.b)
-		# Soft outer glow halo.
-		for i in 4:
-			var grow: float = float(4 - i) * 2.5
-			var a: float = 0.04 + float(i) * 0.03
-			_round_rect_outline(Rect2(Vector2.ZERO, size).grow(grow), Color(gc.r, gc.g, gc.b, a), r + grow, 2.5)
-		# Dark wood base.
-		_round_rect(Rect2(Vector2.ZERO, size), wood_dark, r)
-		# Warm wood planks.
-		var plank_count := 5
-		var plank_h: float = size.y / float(plank_count)
-		for i in plank_count:
-			var y0: float = plank_h * float(i)
-			var y1: float = plank_h * float(i + 1)
-			var bands := 8
-			for s in bands:
-				var t0: float = float(s) / float(bands)
-				var t1: float = float(s + 1) / float(bands)
-				var sy0: float = y0 + (y1 - y0) * t0
-				var sy1: float = y0 + (y1 - y0) * t1
-				var warmth: float = 0.06 * sin(float(i) * 1.7 + float(s) * 0.9)
-				var shade: Color = wood_light.lerp(wood_dark, t0 * 0.5 + 0.25)
-				shade = Color(shade.r + warmth, shade.g + warmth * 0.6, shade.b, shade.a)
-				var chord0: float = _corner_chord_at_y(sy0, r, size.y)
-				var chord1: float = _corner_chord_at_y(sy1, r, size.y)
-				var chord: float = maxf(chord0, chord1)
-				if chord < size.x * 0.5:
-					draw_rect(Rect2(Vector2(chord, sy0), Vector2(size.x - chord * 2, sy1 - sy0)), shade)
-			_draw_wood_grain(y0, y1, i)
-			if i < plank_count - 1:
-				var gch: float = _corner_chord_at_y(y1, r, size.y)
-				if gch < size.x * 0.5:
-					draw_rect(Rect2(Vector2(gch, y1 - 0.5), Vector2(size.x - gch * 2, 1.0)), Color(0, 0, 0, 0.35))
-					draw_rect(Rect2(Vector2(gch, y1 + 0.5), Vector2(size.x - gch * 2, 1.0)), Color(1, 1, 1, 0.04))
-		# Mossy vine accents along top and bottom.
-		_draw_moss_edge(r, true)
-		_draw_moss_edge(r, false)
-		# Wood knot accents.
-		_draw_knots()
-		# Center ambient glow — forest light filtering through.
+		# Gradient fill via horizontal bands + corner circles.
+		var bands := 24
+		for i in bands:
+			var t0: float = float(i) / float(bands)
+			var t1: float = float(i + 1) / float(bands)
+			var c: Color = bg_top.lerp(bg_bot, (t0 + t1) * 0.5)
+			var y0: float = t0 * size.y
+			var y1: float = t1 * size.y
+			var chord0: float = _corner_chord_at_y(y0, r, size.y)
+			var chord1: float = _corner_chord_at_y(y1, r, size.y)
+			var chord: float = maxf(chord0, chord1)
+			if chord < size.x * 0.5:
+				draw_rect(Rect2(Vector2(chord, y0), Vector2(size.x - chord * 2, y1 - y0)), c)
+		# Corner circles with gradient-matched colors.
+		var rr: float = r
+		if rr > 0.5:
+			var c_top: Color = bg_top.lerp(bg_bot, rr / size.y * 0.5)
+			var c_bot: Color = bg_top.lerp(bg_bot, 1.0 - rr / size.y * 0.5)
+			draw_circle(Vector2(rr, rr), rr, c_top)
+			draw_circle(Vector2(size.x - rr, rr), rr, c_top)
+			draw_circle(Vector2(rr, size.y - rr), rr, c_bot)
+			draw_circle(Vector2(size.x - rr, size.y - rr), rr, c_bot)
+		# Subtle center glow.
 		var cx: float = size.x * 0.5
 		var cy: float = size.y * 0.5
-		draw_circle(Vector2(cx, cy), minf(size.x, size.y) * 0.40, Color(gc.r, gc.g, gc.b, glow_color.a * 0.30))
-		draw_circle(Vector2(cx, cy), minf(size.x, size.y) * 0.22, Color(gc.r, gc.g, gc.b, glow_color.a * 0.18))
-		# Warm inner bevel.
-		_round_rect_outline(Rect2(Vector2(1, 1), size - Vector2(2, 2)), Color(1, 0.95, 0.85, 0.06), r - 1, 1.5)
-		# Earthy border.
-		_round_rect_outline(Rect2(Vector2.ZERO, size), Color(gc.r, gc.g, gc.b, 0.40), r, 2.0)
-
-	func _draw_wood_grain(y0: float, y1: float, seed_i: int) -> void:
-		var sd: float = float(seed_i) * 3.14
-		for k in 3:
-			var gy: float = y0 + (y1 - y0) * (0.25 + 0.2 * float(k))
-			var pts := PackedVector2Array()
-			var segs := 16
-			for sgi in segs + 1:
-				var fx: float = float(sgi) / float(segs)
-				var wob: float = sin(fx * 4.5 + sd + float(k) * 2.1) * 1.2 + sin(fx * 9.0 + sd) * 0.6
-				pts.append(Vector2(fx * size.x, gy + wob))
-			draw_polyline(pts, grain_color, 0.8, true)
-
-	func _draw_moss_edge(r: float, top: bool) -> void:
-		var segs := 20
-		var pts := PackedVector2Array()
-		var base_y: float = 4.0 if top else size.y - 4.0
-		for i in segs + 1:
-			var fx: float = float(i) / float(segs)
-			var x: float = fx * size.x
-			var wave: float = sin(fx * 8.0 + (0.0 if top else 2.0)) * 3.0 + sin(fx * 14.0) * 1.5
-			var edge_fade: float = 1.0 - pow(abs(fx - 0.5) * 2.0, 2.0)
-			var y: float = base_y + wave * edge_fade * (1.0 if top else -1.0)
-			pts.append(Vector2(x, y))
-		draw_polyline(pts, Color(moss_color.r, moss_color.g, moss_color.b, moss_color.a * 1.5), 3.0, true)
-		draw_polyline(pts, Color(moss_color.r * 0.7, moss_color.g * 1.1, moss_color.b * 0.7, moss_color.a * 0.8), 1.5, true)
-
-	func _draw_knots() -> void:
-		var knot_positions := [
-			Vector2(size.x * 0.18, size.y * 0.30),
-			Vector2(size.x * 0.78, size.y * 0.65),
-			Vector2(size.x * 0.45, size.y * 0.82),
-		]
-		for pos in knot_positions:
-			var knot_r: float = 6.0 + sin(pos.x * 0.1) * 2.0
-			draw_circle(pos, knot_r + 2.0, Color(wood_dark.r * 0.8, wood_dark.g * 0.8, wood_dark.b * 0.7, 0.5))
-			draw_circle(pos, knot_r, Color(wood_light.r * 0.7, wood_light.g * 0.6, wood_light.b * 0.5, 0.6))
-			draw_arc(pos, knot_r, 0, TAU, 16, Color(grain_color.r, grain_color.g, grain_color.b, 0.45), 1.0, true)
-			draw_arc(pos, knot_r + 4.0, 0, TAU, 16, Color(grain_color.r, grain_color.g, grain_color.b, 0.20), 0.8, true)
+		var gc := Color(glow_color.r, glow_color.g, glow_color.b)
+		draw_circle(Vector2(cx, cy), minf(size.x, size.y) * 0.38, Color(gc.r, gc.g, gc.b, glow_color.a * 0.5))
+		draw_circle(Vector2(cx, cy), minf(size.x, size.y) * 0.20, Color(gc.r, gc.g, gc.b, glow_color.a * 0.3))
+		# Inner highlight.
+		_round_rect_outline(Rect2(Vector2(1, 1), size - Vector2(2, 2)), Color(1, 1, 1, 0.04), r - 1, 1.0)
+		# Thin border.
+		_round_rect_outline(Rect2(Vector2.ZERO, size), border_color, r, 1.5)
 
 	func _corner_chord_at_y(y: float, r: float, h: float) -> float:
 		var d: float = -1.0

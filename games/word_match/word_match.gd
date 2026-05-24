@@ -1,7 +1,7 @@
 extends Control
 ## Word Match — 6–8 letters in a circle, drag to form words.
 
-const LETTER_SCENE_SIZE := 84.0
+const LETTER_SCENE_SIZE := 87.0
 const ROUND_TIME_SEC := 120.0
 const MIN_WORD_LEN := 3
 

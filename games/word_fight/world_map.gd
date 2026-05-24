@@ -4,14 +4,18 @@ extends Control
 
 const Worlds := preload("res://games/word_fight/worlds.gd")
 const Chrome := preload("res://scripts/screen_chrome.gd")
+const Fx := preload("res://games/word_fight/fx.gd")
 
 func _ready() -> void:
+	Fx.set_landscape()
 	_build()
 
 func _build() -> void:
 	Chrome.bg_layer(self)
 	var back := Chrome.header(self, "Story Map")
-	back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
+	back.pressed.connect(func():
+		Fx.set_portrait()
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 
 	var root := VBoxContainer.new()
 	root.anchor_right = 1.0

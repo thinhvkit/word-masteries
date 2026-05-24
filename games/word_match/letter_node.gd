@@ -9,7 +9,7 @@ const LETTER_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 
 signal letter_selected_fx(letter: WMLetter, color: Color)
 
-const SIZE := 84.0
+const SIZE := 87.0
 
 const _CANDY_TIERS := [
 	# Vowels — cherry red

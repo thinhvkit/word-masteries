@@ -15,7 +15,7 @@ const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 signal tile_pressed(tile: WFTile)
 signal tile_selected_fx(tile: WFTile, color: Color)
 
-const SIZE := 64.0
+const SIZE := 87.0
 const RADIUS := 12.0
 
 ## Beneficial special tiles. Order is referenced by Fx.gem_gradient/gem_accent.

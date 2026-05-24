@@ -139,7 +139,7 @@ func _ready() -> void:
 	_build_ui()
 	back_btn.pressed.connect(func():
 		Audio.play("click")
-		_set_orientation_portrait()
+		Fx.set_portrait()
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	submit_btn.pressed.connect(_submit_player_word)
 	clear_btn.pressed.connect(func():
@@ -147,7 +147,7 @@ func _ready() -> void:
 		_clear_chain())
 	rainbow_btn.pressed.connect(_use_rainbow)
 	Audio.start_music()
-	_set_orientation_landscape()
+	Fx.set_landscape()
 	_start_battle(_enemy_idx)
 
 # ---------------- UI construction (wf_game_a layout) ----------------
@@ -194,7 +194,7 @@ func _build_ui() -> void:
 	back_btn.add_theme_stylebox_override("hover", empty_sb)
 	back_btn.add_theme_stylebox_override("pressed", empty_sb)
 	back_btn.add_theme_stylebox_override("focus", empty_sb)
-	back_btn.custom_minimum_size = Vector2(32, 32)
+	back_btn.custom_minimum_size = Vector2(48, 48)
 	_hdr_row.add_child(back_btn)
 	var title_lbl := Label.new()
 	title_lbl.text = "Word Fight"
@@ -464,7 +464,7 @@ func _actions_bar() -> HBoxContainer:
 	var submit_wrap := Control.new()
 	submit_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	submit_wrap.size_flags_stretch_ratio = 2.0
-	submit_wrap.custom_minimum_size = Vector2(0, 52)
+	submit_wrap.custom_minimum_size = Vector2(0, 64)
 	submit_glow = Panel.new()
 	submit_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	submit_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -489,7 +489,7 @@ func _attack_button(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(0, 52)
+	b.custom_minimum_size = Vector2(0, 64)
 	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	b.add_theme_font_size_override("font_size", 19)
 	b.add_theme_color_override("font_color", Color.WHITE)
@@ -559,7 +559,7 @@ func _start_battle(idx: int) -> void:
 	_enemy_idx = idx
 	_enemy = Worlds.enemy(_world_idx, _enemy_idx)
 	_enemy_max_hp = int(_enemy.hp)
-	_enemy_hp = _enemy_max_hp
+	_enemy_hp = 1  # TEMP: test victory — revert to _enemy_max_hp
 	_player_max_hp = GameState.lex_max_hp() + int(Items.sum_effect("max_hp_bonus"))
 	_player_hp = _player_max_hp
 	# Honor the topic seeded by intro; otherwise (e.g. game launched standalone) roll one.
@@ -1051,7 +1051,6 @@ func _defeat() -> void:
 	_dim_board(false)
 	await get_tree().create_timer(0.8).timeout
 	_publish_session(false)
-	_set_orientation_portrait()
 	get_tree().change_scene_to_file("res://games/word_fight/defeat.tscn")
 
 ## Body anchor of a 2.5D combatant in this Control's local space — FX aim here.
@@ -1595,7 +1594,6 @@ func _on_enemy_defeated() -> void:
 	await get_tree().create_timer(1.0).timeout
 
 	_publish_session(true)
-	_set_orientation_portrait()
 	get_tree().change_scene_to_file("res://games/word_fight/victory.tscn")
 
 ## Smoothly tween an HP bar's value + tint instead of snapping.
@@ -1603,21 +1601,3 @@ func _animate_hp_bar(bar: ProgressBar, target: int) -> void:
 	if bar == null: return
 	var tw := bar.create_tween()
 	tw.tween_property(bar, "value", float(target), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-static func _set_orientation_landscape() -> void:
-	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval("try{screen.orientation.lock('landscape')}catch(e){}")
-	elif not OS.has_feature("mobile"):
-		var ws := DisplayServer.window_get_size()
-		if ws.x < ws.y:
-			DisplayServer.window_set_size(Vector2i(ws.y, ws.x))
-
-static func _set_orientation_portrait() -> void:
-	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval("try{screen.orientation.unlock()}catch(e){}")
-	elif not OS.has_feature("mobile"):
-		var ws := DisplayServer.window_get_size()
-		if ws.x > ws.y:
-			DisplayServer.window_set_size(Vector2i(ws.y, ws.x))

@@ -165,7 +165,7 @@ func _apply_design() -> void:
 	var empty_sb := StyleBoxEmpty.new()
 	for s_name in ["normal", "hover", "pressed", "focus"]:
 		hdr_back.add_theme_stylebox_override(s_name, empty_sb)
-	hdr_back.custom_minimum_size = Vector2(32, 32)
+	hdr_back.custom_minimum_size = Vector2(48, 48)
 	hdr_row.add_child(hdr_back)
 	var title_lbl := Label.new()
 	title_lbl.text = "Word Found"
@@ -665,20 +665,12 @@ func _update_submit_state() -> void:
 func _build_targets_box() -> void:
 	for c in targets_box.get_children():
 		c.queue_free()
+	targets_box.add_theme_constant_override("separation", 6)
 	for t in _targets:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var head := Label.new()
-		head.text = "%d-letter:" % t.len
-		head.add_theme_color_override("font_color", Color.WHITE)
-		head.add_theme_font_size_override("font_size", 17)
-		head.custom_minimum_size = Vector2(96, 0)
-		row.add_child(head)
-		for i in t.count:
-			var pip := _Pip.new()
-			pip.filled = i < t.done
-			pip.color = VIBRANT_GOLD
-			row.add_child(pip)
+		var row := _TargetRow.new()
+		row.word_len = t.len
+		row.total = t.count
+		row.done = t.done
 		targets_box.add_child(row)
 
 func _refresh_targets_box() -> void:
@@ -850,18 +842,101 @@ func _invalid_shake() -> void:
 	if _row1_card != null:
 		Fx.shake(_row1_card, 4.0, 0.2)
 
-class _Pip extends Control:
-	var filled: bool = false :
-		set(v): filled = v; queue_redraw()
-	var color: Color = Color("#ffd027") :
-		set(v): color = v; queue_redraw()
+class _TargetRow extends Control:
+	const _FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
+	var word_len: int = 3 :
+		set(v): word_len = v; queue_redraw()
+	var total: int = 3 :
+		set(v): total = v; queue_redraw()
+	var done: int = 0 :
+		set(v): done = v; queue_redraw()
+	const _TIER := {
+		3: {"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "glow": Color("#FF9DB5")},
+		4: {"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "glow": Color("#8DD6FF")},
+		5: {"top": Color("#B07AFF"), "bot": Color("#7030D4"), "glow": Color("#D0ACFF")},
+		6: {"top": Color("#FFD740"), "bot": Color("#FFB300"), "glow": Color("#FFE57F")},
+	}
 	func _ready() -> void:
-		custom_minimum_size = Vector2(18, 18)
-		size = Vector2(18, 18)
+		custom_minimum_size = Vector2(0, 48)
 	func _draw() -> void:
-		var center := size * 0.5
-		if filled:
-			draw_circle(center, 8, color)
-			draw_arc(center, 8, 0, TAU, 24, color.darkened(0.25), 1.5, true)
-		else:
-			draw_arc(center, 8, 0, TAU, 24, Color(1, 1, 1, 0.35), 2.0, true)
+		var tc: Dictionary = _TIER.get(word_len, _TIER[3])
+		var h := size.y
+		var full := done >= total
+		var pill_a := 0.15 if full else 0.08
+		_fill_pill(Rect2(Vector2.ZERO, size), Color(tc.top.r, tc.top.g, tc.top.b, pill_a), 12.0)
+		if full:
+			_outline_pill(Rect2(Vector2.ZERO, size), Color(tc.glow.r, tc.glow.g, tc.glow.b, 0.3), 12.0, 1.5)
+		var br := 15.0
+		var bp := Vector2(26, h * 0.5)
+		draw_circle(bp, br + 4, Color(tc.top.r, tc.top.g, tc.top.b, 0.18))
+		_gradient_circle(bp, br, tc.top, tc.bot)
+		draw_arc(bp, br, 0, TAU, 24, tc.glow, 1.5, true)
+		draw_circle(bp + Vector2(-br * 0.25, -br * 0.28), br * 0.12, Color(1, 1, 1, 0.45))
+		var ns := str(word_len)
+		var nfs := 16
+		var nw := _FONT.get_string_size(ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs)
+		var na := _FONT.get_ascent(nfs)
+		var nd := _FONT.get_descent(nfs)
+		draw_string(_FONT, bp + Vector2(-nw.x * 0.5, (na - nd) * 0.5), ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color.WHITE)
+		var sx := 58.0
+		var sp := 30.0
+		var sr := 10.0
+		for i in total:
+			var c := Vector2(sx + float(i) * sp, h * 0.5)
+			var pts := _star_pts(c, sr)
+			if i < done:
+				draw_circle(c, sr + 3, Color(tc.glow.r, tc.glow.g, tc.glow.b, 0.25))
+				draw_polygon(pts, [tc.top])
+				var ol := pts.duplicate()
+				ol.append(pts[0])
+				draw_polyline(ol, tc.glow, 1.5, true)
+				draw_circle(c + Vector2(-sr * 0.22, -sr * 0.28), sr * 0.13, Color(1, 1, 1, 0.55))
+			else:
+				var ol := pts.duplicate()
+				ol.append(pts[0])
+				draw_polyline(ol, Color(1, 1, 1, 0.18), 1.5, true)
+		var pg := "%d/%d" % [done, total]
+		var pfs := 14
+		var pw := _FONT.get_string_size(pg, HORIZONTAL_ALIGNMENT_RIGHT, -1, pfs)
+		var pa := _FONT.get_ascent(pfs)
+		var pd := _FONT.get_descent(pfs)
+		var pc: Color = tc.glow if full else Color(1, 1, 1, 0.4)
+		draw_string(_FONT, Vector2(size.x - pw.x - 14, h * 0.5 + (pa - pd) * 0.5), pg, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, pc)
+	func _star_pts(center: Vector2, r: float) -> PackedVector2Array:
+		var pts := PackedVector2Array()
+		var ir := r * 0.42
+		for i in 10:
+			var a := -PI * 0.5 + float(i) * PI / 5.0
+			var rd := r if i % 2 == 0 else ir
+			pts.append(center + Vector2(cos(a), sin(a)) * rd)
+		return pts
+	func _gradient_circle(center: Vector2, r: float, top: Color, bot: Color) -> void:
+		for i in 12:
+			var t0 := float(i) / 12.0
+			var t1 := float(i + 1) / 12.0
+			var c: Color = top.lerp(bot, (t0 + t1) * 0.5)
+			var y0 := center.y - r + 2.0 * r * t0
+			var y1 := center.y - r + 2.0 * r * t1
+			var mid := (y0 + y1) * 0.5 - center.y
+			var hw := sqrt(maxf(r * r - mid * mid, 0.0))
+			draw_rect(Rect2(Vector2(center.x - hw, y0), Vector2(hw * 2, y1 - y0)), c)
+	func _fill_pill(rect: Rect2, color: Color, r: float) -> void:
+		var rr := minf(r, minf(rect.size.x, rect.size.y) * 0.5)
+		draw_rect(Rect2(rect.position + Vector2(rr, 0), Vector2(rect.size.x - 2.0 * rr, rect.size.y)), color)
+		draw_rect(Rect2(rect.position + Vector2(0, rr), Vector2(rect.size.x, rect.size.y - 2.0 * rr)), color)
+		draw_circle(rect.position + Vector2(rr, rr), rr, color)
+		draw_circle(rect.position + Vector2(rect.size.x - rr, rr), rr, color)
+		draw_circle(rect.position + Vector2(rr, rect.size.y - rr), rr, color)
+		draw_circle(rect.position + Vector2(rect.size.x - rr, rect.size.y - rr), rr, color)
+	func _outline_pill(rect: Rect2, color: Color, r: float, w: float) -> void:
+		var rr := minf(r, minf(rect.size.x, rect.size.y) * 0.5)
+		var p := rect.position
+		var sz := rect.size
+		draw_line(p + Vector2(rr, 0), p + Vector2(sz.x - rr, 0), color, w)
+		draw_line(p + Vector2(rr, sz.y), p + Vector2(sz.x - rr, sz.y), color, w)
+		draw_line(p + Vector2(0, rr), p + Vector2(0, sz.y - rr), color, w)
+		draw_line(p + Vector2(sz.x, rr), p + Vector2(sz.x, sz.y - rr), color, w)
+		draw_arc(p + Vector2(rr, rr), rr, PI, PI * 1.5, 12, color, w)
+		draw_arc(p + Vector2(sz.x - rr, rr), rr, -PI * 0.5, 0, 12, color, w)
+		draw_arc(p + Vector2(rr, sz.y - rr), rr, PI * 0.5, PI, 12, color, w)
+		draw_arc(p + Vector2(sz.x - rr, sz.y - rr), rr, 0, PI * 0.5, 12, color, w)

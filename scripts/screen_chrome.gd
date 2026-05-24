@@ -63,7 +63,7 @@ static func header(parent: Control, title: String, tag_text: String = "", tag_bg
 	back.add_theme_stylebox_override("hover", empty)
 	back.add_theme_stylebox_override("pressed", empty)
 	back.add_theme_stylebox_override("focus", empty)
-	back.custom_minimum_size = Vector2(32, 32)
+	back.custom_minimum_size = Vector2(48, 48)
 	row.add_child(back)
 
 	var title_lbl := Label.new()
