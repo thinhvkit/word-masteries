@@ -55,6 +55,7 @@ var line_glow: Line2D
 var back_btn: Button
 var toast: Label
 var word_card: PanelContainer
+var shuffle_btn: Button
 var _line_phase: float = 0.0
 
 var _letters: Array[WMLetter] = []
@@ -197,6 +198,38 @@ func _build_ui() -> void:
 	letters_holder.offset_bottom = BOARD_AREA_BOTTOM
 	letters_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(letters_holder)
+
+	# Shuffle button — center of the letter ring.
+	shuffle_btn = Button.new()
+	shuffle_btn.text = ""
+	shuffle_btn.focus_mode = Control.FOCUS_NONE
+	shuffle_btn.custom_minimum_size = Vector2(56, 56)
+	var shuf_icon_path := "res://assets/icons/shuffle.svg"
+	if ResourceLoader.exists(shuf_icon_path):
+		shuffle_btn.icon = load(shuf_icon_path)
+		shuffle_btn.expand_icon = true
+		shuffle_btn.add_theme_constant_override("icon_max_width", 24)
+	else:
+		shuffle_btn.text = "Mix"
+		shuffle_btn.add_theme_font_size_override("font_size", 16)
+	shuffle_btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	var shuf_sb := StyleBoxFlat.new()
+	shuf_sb.bg_color = Color(0.08, 0.06, 0.14, 0.75)
+	shuf_sb.set_corner_radius_all(28)
+	shuf_sb.set_border_width_all(2)
+	shuf_sb.border_color = Color(1, 1, 1, 0.15)
+	shuf_sb.content_margin_left = 14
+	shuf_sb.content_margin_right = 14
+	shuf_sb.content_margin_top = 14
+	shuf_sb.content_margin_bottom = 14
+	var shuf_press := shuf_sb.duplicate() as StyleBoxFlat
+	shuf_press.bg_color = Color(0.18, 0.12, 0.30, 0.9)
+	shuffle_btn.add_theme_stylebox_override("normal", shuf_sb)
+	shuffle_btn.add_theme_stylebox_override("hover", shuf_sb)
+	shuffle_btn.add_theme_stylebox_override("pressed", shuf_press)
+	shuffle_btn.add_theme_stylebox_override("focus", shuf_sb)
+	shuffle_btn.pressed.connect(_shuffle_letters)
+	letters_holder.add_child(shuffle_btn)
 
 	# Drag line — glow underlay + bright magenta core (sibling so it draws above letters).
 	line_glow = Line2D.new()
@@ -354,7 +387,6 @@ func _force_vowels(arr: Array) -> Array:
 	return arr
 
 func _layout_letters() -> void:
-	# Wait one frame so the holder size is finalized.
 	await get_tree().process_frame
 	var center := letters_holder.size * 0.5
 	var radius: float = minf(letters_holder.size.x, letters_holder.size.y) * 0.5 - LETTER_SCENE_SIZE * 0.5 - 8.0
@@ -365,6 +397,26 @@ func _layout_letters() -> void:
 		var node := _letters[i]
 		node.position = pos - Vector2(LETTER_SCENE_SIZE, LETTER_SCENE_SIZE) * 0.5
 		node.play_pop_in(i * 0.05)
+	if shuffle_btn != null:
+		shuffle_btn.position = center - shuffle_btn.size * 0.5
+
+func _shuffle_letters() -> void:
+	if not _running or _is_dragging:
+		return
+	_letters.shuffle()
+	var center := letters_holder.size * 0.5
+	var radius: float = minf(letters_holder.size.x, letters_holder.size.y) * 0.5 - LETTER_SCENE_SIZE * 0.5 - 8.0
+	var n := _letters.size()
+	for i in n:
+		var angle := -PI * 0.5 + TAU * float(i) / float(n)
+		var target := center + Vector2(cos(angle), sin(angle)) * radius - Vector2(LETTER_SCENE_SIZE, LETTER_SCENE_SIZE) * 0.5
+		var tw := _letters[i].create_tween()
+		tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_letters[i], "position", target, 0.3)
+	if shuffle_btn != null:
+		var tw := shuffle_btn.create_tween()
+		tw.tween_property(shuffle_btn, "rotation", shuffle_btn.rotation + TAU, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		shuffle_btn.pivot_offset = shuffle_btn.size * 0.5
 
 func _process(delta: float) -> void:
 	# Pulse the drag line continuously while it has points.

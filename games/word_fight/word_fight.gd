@@ -559,7 +559,7 @@ func _start_battle(idx: int) -> void:
 	_enemy_idx = idx
 	_enemy = Worlds.enemy(_world_idx, _enemy_idx)
 	_enemy_max_hp = int(_enemy.hp)
-	_enemy_hp = 1  # TEMP: test victory — revert to _enemy_max_hp
+	_enemy_hp = _enemy_max_hp
 	_player_max_hp = GameState.lex_max_hp() + int(Items.sum_effect("max_hp_bonus"))
 	_player_hp = _player_max_hp
 	# Honor the topic seeded by intro; otherwise (e.g. game launched standalone) roll one.
