@@ -1,8 +1,8 @@
 class_name WFoundTile
 extends Control
-## Word Found letter tile — vibrant palette (Word Fight style).
-## - AVAILABLE: gradient fill by letter tier, top sheen, drop shadow, ink glyph.
-## - MOVED:     hot magenta gradient, white glyph, scaled-up + glow ring.
+## Word Found letter tile — forest green dungeon theme.
+## - AVAILABLE: bright green gradient, white text, green border.
+## - MOVED:     darker olive green, selection order number in top-right.
 
 const Fx := preload("res://games/word_fight/fx.gd")
 const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
@@ -12,8 +12,16 @@ signal tile_picked_fx(tile: WFoundTile, color: Color)
 
 enum State { AVAILABLE, MOVED }
 
-const SIZE := 50.0
-const RADIUS := 12.0
+const SIZE := 58.0
+const RADIUS := 14.0
+
+const GREEN_AVAIL_TOP := Color("#4a9e5a")
+const GREEN_AVAIL_BOT := Color("#357a42")
+const GREEN_AVAIL_BORDER := Color("#6bc47a")
+
+const GREEN_MOVED_TOP := Color("#3a6830")
+const GREEN_MOVED_BOT := Color("#2a4e22")
+const GREEN_MOVED_BORDER := Color("#5a8a4a")
 
 @export var letter: String = "A" :
 	set(v):
@@ -25,6 +33,11 @@ var state: int = State.AVAILABLE :
 		var prev := state
 		state = v
 		_handle_state_change(prev, state)
+		queue_redraw()
+
+var selection_index: int = -1 :
+	set(v):
+		selection_index = v
 		queue_redraw()
 
 func _ready() -> void:
@@ -53,10 +66,10 @@ func _handle_state_change(prev: int, now: int) -> void:
 	if now == State.MOVED and prev != State.MOVED:
 		var tw := create_tween()
 		tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(self, "scale", Vector2(1.08, 1.08), 0.14)
-		var g := Fx.gradient_for_letter(letter)
-		tile_picked_fx.emit(self, g[1])
+		tw.tween_property(self, "scale", Vector2(1.06, 1.06), 0.14)
+		tile_picked_fx.emit(self, GREEN_AVAIL_BORDER)
 	elif now == State.AVAILABLE:
+		selection_index = -1
 		var tw := create_tween()
 		tw.tween_property(self, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
@@ -64,37 +77,45 @@ func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO, size)
 	var top: Color
 	var bot: Color
-	var ink: Color
+	var border_col: Color
 	if state == State.MOVED:
-		top = Fx.SELECT_TOP; bot = Fx.SELECT_BOTTOM; ink = Fx.SELECT_INK
+		top = GREEN_MOVED_TOP
+		bot = GREEN_MOVED_BOT
+		border_col = GREEN_MOVED_BORDER
 	else:
-		var g := Fx.gradient_for_letter(letter)
-		top = g[0]; bot = g[1]; ink = g[2]
+		top = GREEN_AVAIL_TOP
+		bot = GREEN_AVAIL_BOT
+		border_col = GREEN_AVAIL_BORDER
 
 	# Drop shadow.
-	_round_rect(Rect2(Vector2(0, 3), size), Color(0.15, 0.10, 0.25, 0.22), RADIUS)
+	_round_rect(Rect2(Vector2(0, 4), size), Color(0, 0, 0, 0.45), RADIUS)
 	# Gradient fill.
 	_round_rect_gradient(rect, top, bot, RADIUS)
 	# Top sheen.
-	var sheen_rect := Rect2(rect.position + Vector2(3, 3), Vector2(rect.size.x - 6, rect.size.y * 0.42))
-	_round_rect(sheen_rect, Color(1, 1, 1, 0.22), RADIUS - 3)
+	var sheen_rect := Rect2(rect.position + Vector2(3, 3), Vector2(rect.size.x - 6, rect.size.y * 0.35))
+	_round_rect(sheen_rect, Color(1, 1, 1, 0.10), RADIUS - 3)
 
-	# Outline + glow for MOVED.
+	# Border.
+	_round_rect_outline(rect, border_col, RADIUS, 2.5)
 	if state == State.MOVED:
-		_round_rect_outline(rect, Color("#7a0e4a"), RADIUS, 2.5)
-		_round_rect_outline(rect.grow(2), Color(1.0, 0.5, 0.85, 0.55), RADIUS + 2, 2.0)
-	else:
-		_round_rect_outline(rect, Color(0, 0, 0, 0.18), RADIUS, 1.5)
+		_round_rect_outline(rect.grow(2), Color(GREEN_MOVED_BORDER.r, GREEN_MOVED_BORDER.g, GREEN_MOVED_BORDER.b, 0.3), RADIUS + 2, 1.5)
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 24
+	var fs := 26
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(size.x * 0.5 - ts.x * 0.5, (size.y + ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 1), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.35))
-	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, ink)
+	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
+	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color.WHITE)
+
+	# Selection order number (top-right).
+	if state == State.MOVED and selection_index >= 0:
+		var num_str := str(selection_index + 1)
+		var nfs := 11
+		var num_pos := Vector2(size.x - 12, 14)
+		draw_string(f, num_pos, num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color(1, 1, 1, 0.7))
 
 # --------- drawing helpers ---------
 func _round_rect(rect: Rect2, color: Color, radius: float) -> void:

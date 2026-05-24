@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <!-- Fire emoji style -->
+  <!-- Outer flame -->
+  <path d="M32 6 C32 6 18 22 18 38 C18 48 24 58 32 58 C40 58 46 48 46 38 C46 22 32 6 32 6Z" fill="#FF6D00"/>
+  <!-- Mid flame -->
+  <path d="M32 16 C32 16 22 28 22 40 C22 48 26 54 32 54 C38 54 42 48 42 40 C42 28 32 16 32 16Z" fill="#FF9100"/>
+  <!-- Inner flame -->
+  <path d="M32 26 C32 26 26 34 26 42 C26 48 28 52 32 52 C36 52 38 48 38 42 C38 34 32 26 32 26Z" fill="#FFC107"/>
+  <!-- Core glow -->
+  <path d="M32 36 C32 36 28 40 28 44 C28 48 30 50 32 50 C34 50 36 48 36 44 C36 40 32 36 32 36Z" fill="#FFECB3"/>
+</svg>

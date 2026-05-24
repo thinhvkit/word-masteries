@@ -110,6 +110,8 @@ var _submit_glow: Panel              # glowing shadow ring on Submit when chain 
 var _score_chip: Control             # captured for confetti targeting
 var _wave_chip: Control
 var _row2_pill: PanelContainer
+var _words_count_lbl: Label
+var _total_words: int = 0
 var _pool_letters: String = ""
 var _row1_tiles: Array = []          # all 10-12 tiles in Row 1; their state tells the rest
 var _row2_chain: Array = []          # ordered subset currently in Row 2
@@ -121,7 +123,6 @@ var _running: bool = false
 func _ready() -> void:
 	back_btn.visible = false  # replaced by chrome header
 	submit_btn.pressed.connect(_submit_word)
-	clear_btn.pressed.connect(_clear_chain)
 	_apply_design()
 	if not _load_session():
 		_start_wave(1)
@@ -195,84 +196,85 @@ func _apply_design() -> void:
 	targets_label_node.add_theme_font_size_override("font_size", 16)
 	_wrap_in_dark_card([targets_label_node, targets_box], v)
 
-	# Row2: dark translucent current-word pill.
-	row2_label.add_theme_color_override("font_color", Color.WHITE)
-	row2_label.add_theme_color_override("font_outline_color", Color(0.3, 0.5, 0.35, 0.55))
-	row2_label.add_theme_constant_override("outline_size", 4)
-	row2_label.add_theme_font_size_override("font_size", 28)
+	# Row2: dark word display pill with green border.
+	row2_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
+	row2_label.add_theme_font_size_override("font_size", 14)
 	row2_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	var row2_node: Control = $V/Row2
-	var caption := Label.new()
-	caption.text = "Your word (tap a letter to undo)"
-	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	caption.add_theme_font_size_override("font_size", 18)
-	caption.add_theme_color_override("font_color", Color("#f0e8dc"))
-	caption.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
-	caption.add_theme_constant_override("outline_size", 3)
-	v.add_child(caption)
-	v.move_child(caption, row2_node.get_index())
 	_row2_pill = PanelContainer.new()
 	var pill_sb := StyleBoxFlat.new()
-	pill_sb.bg_color = Color(0.08, 0.06, 0.14, 0.8)
-	pill_sb.set_corner_radius_all(18)
+	pill_sb.bg_color = Color(0.08, 0.12, 0.08, 0.85)
+	pill_sb.set_corner_radius_all(16)
 	pill_sb.set_border_width_all(2)
-	pill_sb.border_color = Color(0.4, 0.9, 0.5, 0.3)
-	pill_sb.shadow_color = Color(0.3, 0.7, 0.4, 0.2)
-	pill_sb.shadow_size = 8
+	pill_sb.border_color = Color(0.35, 0.7, 0.4, 0.35)
+	pill_sb.shadow_color = Color(0, 0, 0, 0.3)
+	pill_sb.shadow_size = 6
 	pill_sb.shadow_offset = Vector2i(0, 3)
-	pill_sb.content_margin_left = 16
-	pill_sb.content_margin_right = 16
-	pill_sb.content_margin_top = 10
-	pill_sb.content_margin_bottom = 10
+	pill_sb.content_margin_left = 20
+	pill_sb.content_margin_right = 20
+	pill_sb.content_margin_top = 14
+	pill_sb.content_margin_bottom = 14
 	_row2_pill.add_theme_stylebox_override("panel", pill_sb)
 	v.add_child(_row2_pill)
 	v.move_child(_row2_pill, row2_node.get_index())
 	row2_node.reparent(_row2_pill, false)
+	row2_holder.visible = false
 
 	# Row1 — stone slab backdrop behind the grid.
 	var row1_lbl: Label = $V/Row1Label
-	row1_lbl.text = "Available letters — tap to use"
-	row1_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	row1_lbl.add_theme_color_override("font_color", Color("#f0e8dc"))
-	row1_lbl.add_theme_font_size_override("font_size", 18)
-	row1_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
-	row1_lbl.add_theme_constant_override("outline_size", 3)
+	row1_lbl.visible = false
 	_wrap_row1_with_bg(row1_grid, v)
 
-	# Status text styling.
+	# Status/feedback — subtle text below the word pill.
 	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_lbl.add_theme_color_override("font_color", Color("#f5efe8"))
-	status_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
-	status_lbl.add_theme_constant_override("outline_size", 3)
-	status_lbl.add_theme_font_size_override("font_size", 18)
+	status_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+	status_lbl.add_theme_font_size_override("font_size", 14)
 	bonus_lbl.add_theme_color_override("font_color", Color("#fff0b0"))
 	bonus_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
 	bonus_lbl.add_theme_constant_override("outline_size", 3)
-	bonus_lbl.add_theme_font_size_override("font_size", 20)
+	bonus_lbl.add_theme_font_size_override("font_size", 17)
 
-	# Action buttons — dungeon style matching Word Fight.
-	_dungeon_btn(clear_btn, Color("#2a2030"), Color("#5a4a6a"), Color("#e0d4c6"))
-	_dungeon_btn(submit_btn, Color("#1a5a2a"), Color("#3a8a4a"), Color.WHITE)
+	# Bottom: WORDS counter + Submit button.
+	clear_btn.get_parent().remove_child(clear_btn)
+	clear_btn.queue_free()
+	var actions_row := submit_btn.get_parent() as HBoxContainer
+
+	# WORDS counter box.
+	var words_box := PanelContainer.new()
+	var wb_sb := StyleBoxFlat.new()
+	wb_sb.bg_color = Color(0, 0, 0, 0.4)
+	wb_sb.set_corner_radius_all(14)
+	wb_sb.set_border_width_all(1)
+	wb_sb.border_color = Color(0.4, 0.7, 0.4, 0.3)
+	wb_sb.content_margin_left = 12
+	wb_sb.content_margin_right = 12
+	wb_sb.content_margin_top = 6
+	wb_sb.content_margin_bottom = 6
+	words_box.add_theme_stylebox_override("panel", wb_sb)
+	words_box.custom_minimum_size = Vector2(72, 52)
+	var wb_col := VBoxContainer.new()
+	wb_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	wb_col.add_theme_constant_override("separation", 1)
+	words_box.add_child(wb_col)
+	var wb_head := Label.new()
+	wb_head.text = "WORDS"
+	wb_head.add_theme_font_size_override("font_size", 9)
+	wb_head.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	wb_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wb_col.add_child(wb_head)
+	_words_count_lbl = Label.new()
+	_words_count_lbl.text = "0"
+	_words_count_lbl.add_theme_font_size_override("font_size", 22)
+	_words_count_lbl.add_theme_color_override("font_color", Color.WHITE)
+	_words_count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wb_col.add_child(_words_count_lbl)
+	actions_row.add_child(words_box)
+	actions_row.move_child(words_box, 0)
+
+	# Submit button — dark green.
+	_dungeon_btn(submit_btn, Color(0.08, 0.12, 0.08), Color(0.35, 0.7, 0.4, 0.25), Color(1, 1, 1, 0.2))
 	submit_btn.text = "Submit"
-	var submit_parent := submit_btn.get_parent() as Control
-	var submit_idx := submit_btn.get_index()
-	var submit_wrap := Control.new()
-	submit_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	submit_wrap.custom_minimum_size = Vector2(0, 52)
-	submit_parent.add_child(submit_wrap)
-	submit_parent.move_child(submit_wrap, submit_idx)
-	_submit_glow = Panel.new()
-	_submit_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_submit_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var glow_sb := StyleBoxFlat.new()
-	glow_sb.bg_color = Color(0.3, 0.8, 0.4, 0.0)
-	glow_sb.set_corner_radius_all(16)
-	glow_sb.shadow_color = Color(0.3, 0.8, 0.4, 0.0)
-	glow_sb.shadow_size = 18
-	_submit_glow.add_theme_stylebox_override("panel", glow_sb)
-	submit_wrap.add_child(_submit_glow)
-	submit_btn.reparent(submit_wrap, false)
-	submit_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_submit_glow = null
 	submit_btn.disabled = true
 
 func _wrap_in_vibrant_chip(lbl: Label, bg: Color, border: Color) -> Control:
@@ -569,56 +571,77 @@ func _on_row1_tile_pressed(t: WFoundTile) -> void:
 	if not _running:
 		return
 	if t.state == TileState.AVAILABLE:
-		# Move into Row 2
 		t.state = TileState.MOVED
+		t.selection_index = _row2_chain.size()
 		_row2_chain.append(t)
+		_refresh_row2_label()
+		_update_submit_state()
+	elif t.state == TileState.MOVED:
+		var idx := _row2_chain.find(t)
+		if idx >= 0:
+			var to_revert := _row2_chain.slice(idx)
+			for rt: WFoundTile in to_revert:
+				rt.state = TileState.AVAILABLE
+			_row2_chain.resize(idx)
+		_reindex_chain()
 		_refresh_row2_label()
 		_update_submit_state()
 
 func _on_row2_tile_pressed(t: WFoundTile) -> void:
-	# Tap a Row-2 tile returns it to Row 1 (full undo).
 	if not _running or t.state != TileState.MOVED:
 		return
 	t.state = TileState.AVAILABLE
 	_row2_chain.erase(t)
+	_reindex_chain()
 	_refresh_row2_label()
 	_update_submit_state()
 
 func _clear_chain() -> void:
 	for t: WFoundTile in _row2_chain.duplicate():
-		_on_row2_tile_pressed(t)
+		t.state = TileState.AVAILABLE
+	_row2_chain.clear()
+	_refresh_row2_label()
+	_update_submit_state()
+
+func _reindex_chain() -> void:
+	for i in _row2_chain.size():
+		(_row2_chain[i] as WFoundTile).selection_index = i
 
 func _refresh_row2_label() -> void:
-	# Render the current word using a transient label list rather than moving
-	# tile widgets between rows (keeps Row 1 layout stable).
-	for c in row2_holder.get_children():
-		c.queue_free()
-	# Size the letter tiles off the viewport width (not the pill's own size, which
-	# would feed back on itself) so the row never overflows on small screens.
-	var count := _row2_chain.size()
-	var avail: float = 280.0
-	var vp_w: float = get_viewport_rect().size.x
-	if vp_w > 0.0:
-		avail = maxf(vp_w - 64.0, 160.0)
-	var bw: float = 36.0
-	if count > 0:
-		bw = clampf((avail - float(count - 1) * 4.0) / float(count), 24.0, 40.0)
-	for t: WFoundTile in _row2_chain:
-		var mini_btn := Button.new()
-		mini_btn.text = t.letter
-		mini_btn.custom_minimum_size = Vector2(bw, 40)
-		mini_btn.add_theme_font_size_override("font_size", 18)
-		mini_btn.focus_mode = Control.FOCUS_NONE
-		Palette.style_button(mini_btn, Palette.PINK, Color.WHITE, 10)
-		mini_btn.pressed.connect(func(): _on_row2_tile_pressed(t))
-		row2_holder.add_child(mini_btn)
-	# The tappable tiles above ARE the word preview — show the big text label
-	# only as an empty-state placeholder, so the word never spans two rows.
-	if _row2_chain.is_empty():
+	var word := _chain_word()
+	row2_holder.visible = false
+	if word.is_empty():
 		row2_label.visible = true
-		row2_label.text = "—"
+		row2_label.text = "Tap letters to spell a word"
+		row2_label.add_theme_font_size_override("font_size", 14)
+		row2_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
 	else:
-		row2_label.visible = false
+		row2_label.visible = true
+		row2_label.text = _spaced_word(word)
+		row2_label.add_theme_font_size_override("font_size", 28)
+		row2_label.add_theme_color_override("font_color", Color.WHITE)
+	_refresh_word_feedback()
+
+func _spaced_word(w: String) -> String:
+	var out := ""
+	for i in w.length():
+		if i > 0:
+			out += "  "
+		out += w[i]
+	return out
+
+func _refresh_word_feedback() -> void:
+	var word := _chain_word()
+	if word.length() < MIN_WORD_LEN:
+		_set_status("")
+		return
+	var lower := word.to_lower()
+	if _used_words.has(lower):
+		_set_status("Already used!")
+	elif not Words.is_valid(lower):
+		_set_status("not a word")
+	else:
+		_set_status("")
 
 func _chain_word() -> String:
 	var s := ""
@@ -627,15 +650,14 @@ func _chain_word() -> String:
 	return s
 
 func _update_submit_state() -> void:
-	var len_ok := _chain_word().length() >= MIN_WORD_LEN
-	submit_btn.disabled = not len_ok
-	if _submit_glow != null:
-		var sb := _submit_glow.get_theme_stylebox("panel") as StyleBoxFlat
-		if sb != null:
-			var fresh: StyleBoxFlat = sb.duplicate()
-			fresh.shadow_color = Color(1.0, 0.4, 0.7, 0.55 if len_ok else 0.0)
-			fresh.shadow_size = 22 if len_ok else 0
-			_submit_glow.add_theme_stylebox_override("panel", fresh)
+	var word := _chain_word()
+	var len_ok := word.length() >= MIN_WORD_LEN
+	var valid := len_ok and Words.is_valid(word.to_lower()) and not _used_words.has(word.to_lower())
+	submit_btn.disabled = not valid
+	if valid:
+		_dungeon_btn(submit_btn, Color("#1a5a2a"), Color("#3a8a4a"), Color.WHITE)
+	else:
+		_dungeon_btn(submit_btn, Color(0.08, 0.12, 0.08), Color(0.35, 0.7, 0.4, 0.25), Color(1, 1, 1, 0.2))
 
 # ---------------- targets box ----------------
 
@@ -713,7 +735,9 @@ func _submit_word() -> void:
 		Fx.shake(self, 3.0, 0.22)
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
 
-	# Letters stay usable — return them to AVAILABLE so the player can reuse them.
+	_total_words += 1
+	if _words_count_lbl != null:
+		_words_count_lbl.text = str(_total_words)
 	for t: WFoundTile in _row2_chain:
 		t.state = TileState.AVAILABLE
 	_row2_chain.clear()
@@ -775,6 +799,7 @@ func _save_session() -> void:
 		"targets": _targets.duplicate(true),
 		"used_words": used_list,
 		"bonus_words": _bonus_words.duplicate(),
+		"total_words": _total_words,
 	}
 	GameState.save()
 
@@ -803,6 +828,7 @@ func _load_session() -> bool:
 	_bonus_words.clear()
 	for w: Variant in s.get("bonus_words", []):
 		_bonus_words.append(w as String)
+	_total_words = int(s.get("total_words", 0))
 	_running = true
 	_row2_chain.clear()
 	_build_row1()
@@ -810,6 +836,8 @@ func _load_session() -> bool:
 	_build_targets_box()
 	_refresh_bonus()
 	_refresh_hud()
+	if _words_count_lbl != null:
+		_words_count_lbl.text = str(_total_words)
 	_set_status("Wave %d resumed" % _wave)
 	return true
 

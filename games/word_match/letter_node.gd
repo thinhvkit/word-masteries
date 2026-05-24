@@ -1,9 +1,8 @@
 class_name WMLetter
 extends Control
-## Word Match letter — vibrant circle matching Word Fight's tile style.
-## Idle: gradient fill by letter tier, top sheen, drop shadow, bold ink glyph.
-## Selected: hot-pink/magenta gradient, white glyph, scale 1.08, glow ring.
-## Animations: pop-in, sparkle burst on select (via signal).
+## Word Match letter — candy-style glossy circle.
+## Idle: bright candy gradient, glossy sheen, thick colored outline.
+## Selected: deeper saturated candy, white glyph, scale 1.12, glow ring.
 
 const Fx := preload("res://games/word_fight/fx.gd")
 const LETTER_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
@@ -11,6 +10,21 @@ const LETTER_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 signal letter_selected_fx(letter: WMLetter, color: Color)
 
 const SIZE := 84.0
+
+const _CANDY_TIERS := [
+	# Vowels — cherry red
+	{"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FF9DB5"), "ink": Color.WHITE},
+	# Common — ocean blue
+	{"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#8DD6FF"), "ink": Color.WHITE},
+	# Uncommon — grape purple
+	{"top": Color("#B07AFF"), "bot": Color("#7030D4"), "outline": Color("#D0ACFF"), "ink": Color.WHITE},
+	# Rare — lime green
+	{"top": Color("#7AE86A"), "bot": Color("#30A830"), "outline": Color("#A8F49E"), "ink": Color.WHITE},
+]
+
+const _CANDY_SELECT := {
+	"top": Color("#FFD740"), "bot": Color("#FFB300"), "outline": Color("#FFE57F"), "ink": Color.WHITE,
+}
 
 @export var letter: String = "A" :
 	set(v):
@@ -24,8 +38,8 @@ var selected: bool = false :
 		_animate_select()
 		queue_redraw()
 		if selected:
-			var grad := Fx.gradient_for_letter(letter)
-			letter_selected_fx.emit(self, grad[1])
+			var candy := _candy_for_letter()
+			letter_selected_fx.emit(self, candy.outline)
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
@@ -48,53 +62,66 @@ func play_pop_in(delay: float = 0.0) -> void:
 	tw.tween_property(self, "modulate:a", 1.0, 0.24)
 
 func _animate_select() -> void:
-	var target_scale := Vector2.ONE * (1.1 if selected else 1.0)
+	var target_scale := Vector2.ONE * (1.12 if selected else 1.0)
 	var tw := create_tween()
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "scale", target_scale, 0.16)
 
+func _candy_for_letter() -> Dictionary:
+	var tier := Fx.tier_for_letter(letter)
+	return _CANDY_TIERS[clampi(tier, 0, _CANDY_TIERS.size() - 1)]
+
 func _draw() -> void:
 	var center := size * 0.5
 	var r := SIZE * 0.5 - 2.0
-	# Soft drop shadow.
-	draw_circle(center + Vector2(0, 4), r, Color(0.15, 0.10, 0.25, 0.22))
-
-	var top: Color
-	var bot: Color
+	var candy: Dictionary
 	var ink: Color
 	if selected:
-		top = Fx.SELECT_TOP
-		bot = Fx.SELECT_BOTTOM
-		ink = Fx.SELECT_INK
+		candy = _CANDY_SELECT
+		ink = _CANDY_SELECT.ink
 	else:
-		var g := Fx.gradient_for_letter(letter)
-		top = g[0]; bot = g[1]; ink = g[2]
+		candy = _candy_for_letter()
+		ink = candy.ink
 
-	_draw_gradient_circle(center, r, top, bot)
+	# Drop shadow (colored).
+	draw_circle(center + Vector2(0, 5), r, Color(candy.bot.r, candy.bot.g, candy.bot.b, 0.35))
 
-	# Sheen — top arc highlight.
-	draw_arc(center + Vector2(0, -2), r - 6, PI * 1.15, PI * 1.85, 40, Color(1, 1, 1, 0.55), 6.0)
+	# Main gradient fill.
+	_draw_gradient_circle(center, r, candy.top, candy.bot)
 
-	# Outline.
+	# Glossy candy sheen — big highlight arc near the top.
+	draw_arc(center + Vector2(0, -4), r - 10, PI * 1.1, PI * 1.9, 40, Color(1, 1, 1, 0.7), 8.0, true)
+	# Secondary smaller sheen for extra gloss.
+	draw_arc(center + Vector2(0, -2), r - 16, PI * 1.2, PI * 1.8, 32, Color(1, 1, 1, 0.35), 5.0, true)
+
+	# Highlight dot (candy reflection).
+	draw_circle(center + Vector2(-r * 0.28, -r * 0.32), r * 0.12, Color(1, 1, 1, 0.55))
+	draw_circle(center + Vector2(-r * 0.18, -r * 0.42), r * 0.06, Color(1, 1, 1, 0.7))
+
+	# Thick colored outline.
 	if selected:
-		draw_arc(center, r - 1, 0, TAU, 64, Color("#7a0e4a"), 3.0, true)
-		# Glow ring just outside.
-		draw_arc(center, r + 3, 0, TAU, 64, Color(1.0, 0.5, 0.85, 0.6), 2.0, true)
+		draw_arc(center, r, 0, TAU, 64, candy.outline, 4.0, true)
+		# Outer glow ring.
+		draw_arc(center, r + 4, 0, TAU, 64, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.45), 3.0, true)
+		draw_arc(center, r + 8, 0, TAU, 64, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.15), 2.5, true)
 	else:
-		draw_arc(center, r - 1, 0, TAU, 64, Color(0, 0, 0, 0.2), 2.0, true)
+		draw_arc(center, r, 0, TAU, 64, candy.outline, 3.0, true)
+		# Subtle outer glow.
+		draw_arc(center, r + 3, 0, TAU, 64, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.18), 2.0, true)
+
+	# Bottom edge shadow for 3D depth.
+	draw_arc(center, r - 1, 0.15, PI - 0.15, 32, Color(0, 0, 0, 0.18), 3.0, true)
 
 	_draw_letter(center, ink)
 
 func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) -> void:
-	# Approximate a vertical gradient inside a circle using horizontal chords.
-	var bands := 22
+	var bands := 24
 	for i in bands:
 		var t0: float = float(i) / float(bands)
 		var t1: float = float(i + 1) / float(bands)
 		var c: Color = top.lerp(bot, (t0 + t1) * 0.5)
 		var y0: float = center.y - r + (2 * r) * t0
 		var y1: float = center.y - r + (2 * r) * t1
-		# Chord half-width at midpoint of this band.
 		var mid: float = (y0 + y1) * 0.5 - center.y
 		var hw: float = sqrt(maxf(r * r - mid * mid, 0.0))
 		draw_rect(Rect2(Vector2(center.x - hw, y0), Vector2(hw * 2, y1 - y0)), c)
@@ -106,6 +133,5 @@ func _draw_letter(center: Vector2, col: Color) -> void:
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5)
-	# Drop shadow for readability against the gradient.
-	draw_string(f, base + Vector2(1, 1), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.35))
+	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
 	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)

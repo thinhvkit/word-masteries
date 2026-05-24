@@ -4,7 +4,6 @@ extends Control
 const LETTER_SCENE_SIZE := 84.0
 const ROUND_TIME_SEC := 120.0
 const MIN_WORD_LEN := 3
-const WORDS_PER_WAVE := 6
 
 # Curated letter pools known to produce many valid sub-words.
 # (Picked to satisfy the vowel guarantee — each has ≥2 vowels.)
@@ -68,8 +67,6 @@ var _found_order: Array = []       # in order discovered, for results screen
 var _is_dragging: bool = false
 var _pool: String = ""             # current round pool
 var _possible_words: Array = []    # all formable words from pool (length-desc)
-var _wave: int = 1
-var _wave_words: int = 0
 
 func _ready() -> void:
 	_build_ui()
@@ -285,8 +282,6 @@ func _start_round() -> void:
 	_score = 0
 	_time_left = ROUND_TIME_SEC
 	_running = true
-	_wave = 1
-	_wave_words = 0
 	_found.clear()
 	_found_order.clear()
 	_spawn_wave()
@@ -309,13 +304,6 @@ func _spawn_wave() -> void:
 	)
 	_spawn_letters(pool)
 	_layout_letters()
-
-func _next_wave() -> void:
-	_wave += 1
-	_wave_words = 0
-	Fx.banner(self, "Wave %d" % _wave, Color("#3aa8ff"), Color.WHITE)
-	_spawn_wave()
-	_refresh_found()
 
 func _pick_pool() -> String:
 	var src: Array
@@ -548,9 +536,6 @@ func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Arra
 		Fx.banner(self, word_upper, Color("#ff3aa8"), Color.WHITE)
 		Fx.shake(self, 3.0, 0.2)
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.35))
-	_wave_words += 1
-	if _wave_words >= WORDS_PER_WAVE and _running:
-		_next_wave()
 
 func _shake_feedback(msg: String) -> void:
 	_show_toast(msg, Palette.RED)

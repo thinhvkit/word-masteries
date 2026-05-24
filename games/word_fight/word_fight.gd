@@ -1539,9 +1539,61 @@ func _on_enemy_defeated() -> void:
 	_busy = true
 	Audio.stop_music()
 	Audio.play("victory")
-	# Victory fireworks before scene change.
-	Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.45))
-	await get_tree().create_timer(0.9).timeout
+
+	# --- Phase 1: Enemy dissolve + big shake ---
+	Fx.shake(self, 8.0, 0.4)
+	if enemy_avatar != null:
+		var ea := enemy_avatar as Control
+		# Flash white then fade out.
+		var tw_e := ea.create_tween()
+		tw_e.tween_property(ea, "modulate", Color(3, 3, 3, 1), 0.15)
+		tw_e.tween_property(ea, "modulate", Color(1, 1, 1, 0), 0.5)
+		tw_e.set_parallel(false)
+		# Dissolve sparkles from enemy position.
+		var ec := ea.global_position + ea.size * 0.5 - global_position
+		Fx.sparkle_burst(self, ec, Color("#ffd027"), 20)
+		Fx.sparkle_burst(self, ec + Vector2(-20, 10), Color("#ff3aa8"), 12)
+		Fx.sparkle_burst(self, ec + Vector2(20, -10), Color("#3aa8ff"), 12)
+
+	# --- Phase 2: Screen flash ---
+	var flash := ColorRect.new()
+	flash.color = Color(1, 1, 1, 0)
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.z_index = 300
+	add_child(flash)
+	var tw_f := flash.create_tween()
+	tw_f.tween_property(flash, "color:a", 0.6, 0.12)
+	tw_f.tween_property(flash, "color:a", 0.0, 0.4)
+	tw_f.tween_callback(flash.queue_free)
+
+	await get_tree().create_timer(0.35).timeout
+
+	# --- Phase 3: Multi-wave fireworks ---
+	var cx := size.x * 0.5
+	var cy := size.y * 0.4
+	Fx.fireworks(self, Vector2(cx, cy))
+	Fx.fireworks(self, Vector2(cx - 80, cy + 40))
+	Fx.fireworks(self, Vector2(cx + 80, cy - 20))
+
+	# --- Phase 4: Victory banner ---
+	Fx.banner(self, "VICTORY!", Color("#ffd027"), Color("#7a4a00"))
+
+	# Player celebration bounce.
+	if player_avatar != null:
+		var pa := player_avatar as Control
+		var tw_p := pa.create_tween().set_loops(3)
+		tw_p.tween_property(pa, "position:y", pa.position.y - 12, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw_p.tween_property(pa, "position:y", pa.position.y, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+	await get_tree().create_timer(0.5).timeout
+
+	# --- Phase 5: Second fireworks wave ---
+	Fx.fireworks(self, Vector2(cx + 50, cy + 30))
+	Fx.fireworks(self, Vector2(cx - 60, cy - 30))
+
+	await get_tree().create_timer(1.0).timeout
+
 	_publish_session(true)
 	_set_orientation_portrait()
 	get_tree().change_scene_to_file("res://games/word_fight/victory.tscn")
