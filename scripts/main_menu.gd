@@ -3,7 +3,7 @@ extends Control
 const Fx := preload("res://games/word_fight/fx.gd")
 
 const GAMES := [
-	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 5×5 board","tag":"Battle","scene":"res://games/word_fight/world_map.tscn"},
+	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 4×4 board","tag":"Battle","scene":"res://games/word_fight/world_map.tscn"},
 	{"id":"word_match","name":"Word Match","desc":"Drag across circle letters — 2 minutes","tag":"Drag","scene":"res://games/word_match/word_match.tscn"},
 	{"id":"word_found","name":"Word Found","desc":"Tap letters into rows, wave by wave","tag":"Waves","scene":"res://games/word_found/word_found.tscn"},
 	{"id":"story_tell","name":"Story Tell","desc":"Fill blanks — AI scores your grammar","tag":"AI","scene":"res://games/story_tell/story_tell.tscn"},
@@ -12,24 +12,19 @@ const GAMES := [
 	{"id":"listen_dictate","name":"Listen & Dictate","desc":"Hear the word — type it correctly","tag":"Audio","scene":"res://games/listen_dictate/listen_dictate.tscn"},
 ]
 
-const BG := Color("#faf5ed")
-const TEXT := Color("#5a4840")
-const TEXT_SEC := Color("#9a8a7e")
-const SURFACE := Color("#ffffff")
-const BORDER := Color("#e8e0d8")
-const GOLD_TINT := Color("#fff1c4")
-const GOLD_DEEP := Color("#b48218")
-const MODE_CHIP_BG := Color("#ece4d8")
-
-# Vibrant tokens — match the in-game palette.
-const VIBRANT_BLUE := Color("#3aa8ff")
-const VIBRANT_BLUE_DARK := Color("#0f5e9c")
-const VIBRANT_GOLD := Color("#ffd027")
-const VIBRANT_GOLD_DARK := Color("#7a4a00")
-const VIBRANT_MAGENTA := Color("#ff3aa8")
-const VIBRANT_MAGENTA_DARK := Color("#7a0e4a")
-const DARK_CARD := Color("#1a1240")
-const DARK_CARD_BORDER := Color("#3a2a78")
+# Cozy warm palette.
+const BG_TOP := Color("#FFF8F0")
+const BG_BOT := Color("#F0E6DA")
+const CARD_BG := Color("#FFFCF8")
+const CARD_BORDER := Color("#E8DDD4")
+const CARD_SHADOW := Color(0.42, 0.30, 0.18, 0.10)
+const TEXT_WARM := Color("#4A3A30")
+const TEXT_SEC := Color("#8A7568")
+const ACCENT_GOLD := Color("#D4940A")
+const ACCENT_GOLD_LIGHT := Color("#FFF3D4")
+const ACCENT_GREEN := Color("#6EA87A")
+const ACCENT_ROSE := Color("#D4728A")
+const COZY_BROWN := Color("#8B6B50")
 
 @onready var list: VBoxContainer = $V/Scroll/List
 @onready var greet: Label = $V/Header/Greet
@@ -40,12 +35,24 @@ const DARK_CARD_BORDER := Color("#3a2a78")
 @onready var title_lbl: Label = $V/Title
 
 func _ready() -> void:
-	# Animated vibrant backdrop matching the in-game palette.
-	var bg := Fx.BoardBG.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
-	move_child(bg, 0)
+	# Warm gradient background.
+	var bg_panel := Panel.new()
+	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg_sb := StyleBoxFlat.new()
+	bg_sb.bg_color = BG_TOP
+	bg_panel.add_theme_stylebox_override("panel", bg_sb)
+	add_child(bg_panel)
+	move_child(bg_panel, 0)
+	# Warm overlay gradient via a second panel (bottom tint).
+	var tint := Panel.new()
+	tint.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tint_sb := StyleBoxFlat.new()
+	tint_sb.bg_color = Color(BG_BOT.r, BG_BOT.g, BG_BOT.b, 0.0)
+	tint.add_theme_stylebox_override("panel", tint_sb)
+	add_child(tint)
+	move_child(tint, 1)
 
 	var sc_bar: VScrollBar = $V/Scroll.get_v_scroll_bar()
 	for s_name in ["scroll", "scroll_highlight", "scroll_pressed", "grabber", "grabber_highlight", "grabber_pressed"]:
@@ -53,17 +60,13 @@ func _ready() -> void:
 
 	var who := GameState.player_name if not GameState.player_name.is_empty() else "there"
 	greet.text = "Hi, %s" % who
-	greet.add_theme_color_override("font_color", Color.WHITE)
-	greet.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
-	greet.add_theme_constant_override("outline_size", 4)
+	greet.add_theme_color_override("font_color", TEXT_WARM)
 	greet.add_theme_font_size_override("font_size", 24)
 	_insert_avatar_chip()
 	_insert_sound_toggle()
 	_style_xp_pill()
 	_refresh_xp()
 
-	# Replace the old mode badge + bottom button with a centered pill row
-	# (mode chip + Change button) like the design.
 	mode_badge.visible = false
 	title_lbl.visible = false
 	change_mode_btn.visible = false
@@ -73,10 +76,9 @@ func _ready() -> void:
 	for i in GAMES.size():
 		var card := _build_row(GAMES[i])
 		list.add_child(card)
-		# Staggered pop-in.
 		card.modulate.a = 0.0
 		card.scale = Vector2(0.92, 0.92)
-		card.pivot_offset = Vector2(160, 42)
+		card.pivot_offset = Vector2(160, 46)
 		var tw := card.create_tween()
 		tw.tween_interval(i * 0.06)
 		tw.set_parallel(true)
@@ -87,34 +89,30 @@ func _insert_mode_row() -> void:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 10)
-
-	row.add_child(_chip(GameState.mode_name().to_upper(), VIBRANT_BLUE, Color.WHITE, false, VIBRANT_BLUE_DARK))
-	var change_btn := _chip("CHANGE", VIBRANT_MAGENTA, Color.WHITE, true, VIBRANT_MAGENTA_DARK)
+	row.add_child(_chip(GameState.mode_name().to_upper(), COZY_BROWN, Color.WHITE, false))
+	var change_btn := _chip("CHANGE", ACCENT_ROSE, Color.WHITE, true)
 	change_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/mode_select.tscn"))
 	row.add_child(change_btn)
-
 	var v := $V as VBoxContainer
 	v.add_child(row)
-	# Place right after the header (index 0).
 	v.move_child(row, 1)
 
 func _insert_avatar_chip() -> void:
-	# Round vibrant gold badge with magenta ring for the player's SVG avatar.
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(48, 48)
 	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var bg_panel := Panel.new()
-	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var bg_p := Panel.new()
+	bg_p.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#ffe9d4")
+	sb.bg_color = ACCENT_GOLD_LIGHT
 	sb.set_corner_radius_all(24)
 	sb.set_border_width_all(2)
-	sb.border_color = VIBRANT_MAGENTA
-	sb.shadow_color = Color(VIBRANT_MAGENTA.r, VIBRANT_MAGENTA.g, VIBRANT_MAGENTA.b, 0.28)
+	sb.border_color = ACCENT_GOLD
+	sb.shadow_color = Color(ACCENT_GOLD.r, ACCENT_GOLD.g, ACCENT_GOLD.b, 0.2)
 	sb.shadow_size = 4
 	sb.shadow_offset = Vector2i(0, 2)
-	bg_panel.add_theme_stylebox_override("panel", sb)
-	holder.add_child(bg_panel)
+	bg_p.add_theme_stylebox_override("panel", sb)
+	holder.add_child(bg_p)
 	var icon := TextureRect.new()
 	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
 	if ResourceLoader.exists(path):
@@ -136,48 +134,48 @@ func _insert_sound_toggle() -> void:
 	var btn := Button.new()
 	btn.text = "ON" if GameState.sound_on else "OFF"
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.custom_minimum_size = Vector2(44, 44)
+	btn.custom_minimum_size = Vector2(48, 48)
 	btn.add_theme_font_size_override("font_size", 13)
-	var fg := Color.WHITE if GameState.sound_on else Color(1, 1, 1, 0.5)
+	var on := GameState.sound_on
+	var fg := TEXT_WARM if on else TEXT_SEC
 	btn.add_theme_color_override("font_color", fg)
 	btn.add_theme_color_override("font_hover_color", fg)
 	btn.add_theme_color_override("font_pressed_color", fg)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = VIBRANT_BLUE if GameState.sound_on else Color(0.3, 0.3, 0.4, 0.6)
+	sb.bg_color = ACCENT_GOLD_LIGHT if on else Color(0.92, 0.88, 0.84, 1.0)
 	sb.set_corner_radius_all(99)
 	sb.set_border_width_all(2)
-	sb.border_color = VIBRANT_BLUE_DARK if GameState.sound_on else Color(0.4, 0.4, 0.5, 0.4)
+	sb.border_color = ACCENT_GOLD if on else CARD_BORDER
 	sb.content_margin_left = 10
 	sb.content_margin_right = 10
 	sb.content_margin_top = 6
 	sb.content_margin_bottom = 6
-	sb.shadow_color = Color(0, 0, 0, 0.22)
+	sb.shadow_color = CARD_SHADOW
 	sb.shadow_size = 3
 	sb.shadow_offset = Vector2i(0, 1)
 	btn.add_theme_stylebox_override("normal", sb)
 	btn.add_theme_stylebox_override("hover", sb)
 	btn.add_theme_stylebox_override("pressed", sb)
 	btn.add_theme_stylebox_override("focus", sb)
-	btn.modulate = Color.WHITE if GameState.sound_on else Color(0.7, 0.7, 0.7, 1.0)
 	btn.pressed.connect(func():
 		GameState.toggle_sound()
-		btn.text = "ON" if GameState.sound_on else "OFF"
-		btn.modulate = Color.WHITE if GameState.sound_on else Color(0.7, 0.7, 0.7, 1.0)
+		var is_on := GameState.sound_on
+		btn.text = "ON" if is_on else "OFF"
+		var new_fg := TEXT_WARM if is_on else TEXT_SEC
+		btn.add_theme_color_override("font_color", new_fg)
+		btn.add_theme_color_override("font_hover_color", new_fg)
+		btn.add_theme_color_override("font_pressed_color", new_fg)
 		var new_sb := sb.duplicate() as StyleBoxFlat
-		new_sb.bg_color = VIBRANT_BLUE if GameState.sound_on else Color(0.3, 0.3, 0.4, 0.6)
-		new_sb.border_color = VIBRANT_BLUE_DARK if GameState.sound_on else Color(0.4, 0.4, 0.5, 0.4)
+		new_sb.bg_color = ACCENT_GOLD_LIGHT if is_on else Color(0.92, 0.88, 0.84, 1.0)
+		new_sb.border_color = ACCENT_GOLD if is_on else CARD_BORDER
 		btn.add_theme_stylebox_override("normal", new_sb)
 		btn.add_theme_stylebox_override("hover", new_sb)
 		btn.add_theme_stylebox_override("pressed", new_sb)
-		btn.add_theme_stylebox_override("focus", new_sb)
-		var new_fg := Color.WHITE if GameState.sound_on else Color(1, 1, 1, 0.5)
-		btn.add_theme_color_override("font_color", new_fg)
-		btn.add_theme_color_override("font_hover_color", new_fg)
-		btn.add_theme_color_override("font_pressed_color", new_fg))
+		btn.add_theme_stylebox_override("focus", new_sb))
 	var hdr := $V/Header as HBoxContainer
 	hdr.add_child(btn)
 
-func _chip(text: String, bg: Color, fg: Color, clickable: bool, border: Color = Color(0, 0, 0, 0)) -> Button:
+func _chip(text: String, bg: Color, fg: Color, clickable: bool) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
@@ -193,11 +191,8 @@ func _chip(text: String, bg: Color, fg: Color, clickable: bool, border: Color = 
 	sb.content_margin_right = 16
 	sb.content_margin_top = 7
 	sb.content_margin_bottom = 7
-	if border.a > 0:
-		sb.set_border_width_all(2)
-		sb.border_color = border
-	sb.shadow_color = Color(0, 0, 0, 0.22)
-	sb.shadow_size = 4
+	sb.shadow_color = Color(bg.r * 0.5, bg.g * 0.5, bg.b * 0.5, 0.2)
+	sb.shadow_size = 3
 	sb.shadow_offset = Vector2i(0, 2)
 	b.add_theme_stylebox_override("normal", sb)
 	b.add_theme_stylebox_override("hover", sb)
@@ -210,21 +205,20 @@ func _chip(text: String, bg: Color, fg: Color, clickable: bool, border: Color = 
 
 func _style_xp_pill() -> void:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = VIBRANT_GOLD
+	sb.bg_color = ACCENT_GOLD_LIGHT
 	sb.set_corner_radius_all(99)
 	sb.set_border_width_all(2)
-	sb.border_color = Color("#dba830")
+	sb.border_color = ACCENT_GOLD
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
 	sb.content_margin_top = 6
 	sb.content_margin_bottom = 6
-	sb.shadow_color = Color(0, 0, 0, 0.25)
+	sb.shadow_color = Color(ACCENT_GOLD.r, ACCENT_GOLD.g, ACCENT_GOLD.b, 0.15)
 	sb.shadow_size = 4
 	sb.shadow_offset = Vector2i(0, 2)
 	xp_pill.add_theme_stylebox_override("panel", sb)
-	xp_label.add_theme_color_override("font_color", VIBRANT_GOLD_DARK)
+	xp_label.add_theme_color_override("font_color", ACCENT_GOLD)
 	xp_label.add_theme_font_size_override("font_size", 15)
-	# Replace the original Label child with an HBox: star icon + label.
 	var parent := xp_label.get_parent() as Control
 	var idx := xp_label.get_index()
 	var row := HBoxContainer.new()
@@ -239,7 +233,7 @@ func _style_xp_pill() -> void:
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.custom_minimum_size = Vector2(16, 16)
-		icon.modulate = VIBRANT_GOLD_DARK
+		icon.modulate = ACCENT_GOLD
 		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(icon)
@@ -252,9 +246,7 @@ func _refresh_xp() -> void:
 
 func _build_row(g: Dictionary) -> Control:
 	var color: Color = Palette.game_color(g.id)
-	var dark := color.darkened(0.28)
 
-	# Outer button — translucent dark navy card so the animated bg shows through.
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(0, 92)
 	btn.focus_mode = Control.FOCUS_NONE
@@ -266,27 +258,27 @@ func _build_row(g: Dictionary) -> Control:
 	)
 	btn.text = ""
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(DARK_CARD.r, DARK_CARD.g, DARK_CARD.b, 0.82)
-	sb.set_corner_radius_all(22)
-	sb.set_border_width_all(2)
-	sb.border_color = DARK_CARD_BORDER
-	sb.shadow_color = Color(0, 0, 0, 0.35)
-	sb.shadow_size = 6
+	sb.bg_color = CARD_BG
+	sb.set_corner_radius_all(20)
+	sb.set_border_width_all(1)
+	sb.border_color = CARD_BORDER
+	sb.shadow_color = CARD_SHADOW
+	sb.shadow_size = 8
 	sb.shadow_offset = Vector2i(0, 3)
+	sb.content_margin_left = 0
+	sb.content_margin_right = 0
 	var sb_hover := sb.duplicate() as StyleBoxFlat
 	sb_hover.border_color = color
-	sb_hover.shadow_color = Color(color.r, color.g, color.b, 0.28)
-	sb_hover.shadow_size = 6
+	sb_hover.shadow_color = Color(color.r, color.g, color.b, 0.15)
+	sb_hover.shadow_size = 10
 	var sb_press := sb.duplicate() as StyleBoxFlat
-	sb_press.shadow_size = 2
+	sb_press.shadow_size = 3
 	sb_press.shadow_offset = Vector2i(0, 1)
-	sb_press.content_margin_top = 2
 	btn.add_theme_stylebox_override("normal", sb)
 	btn.add_theme_stylebox_override("hover", sb_hover)
 	btn.add_theme_stylebox_override("pressed", sb_press)
 	btn.add_theme_stylebox_override("focus", sb)
 
-	# Row content.
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 14)
@@ -297,11 +289,9 @@ func _build_row(g: Dictionary) -> Control:
 	row.offset_bottom = 0
 	btn.add_child(row)
 
-	# Vibrant icon block — gradient fill, glow ring.
-	var icon := _icon_block(g.id, color, dark)
+	var icon := _icon_block(g.id, color)
 	row.add_child(icon)
 
-	# Text column.
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -310,53 +300,47 @@ func _build_row(g: Dictionary) -> Control:
 	var name_lbl := Label.new()
 	name_lbl.text = g.name
 	name_lbl.add_theme_font_size_override("font_size", 18)
-	name_lbl.add_theme_color_override("font_color", Color.WHITE)
-	name_lbl.clip_text = true                      # never overflow the column
+	name_lbl.add_theme_color_override("font_color", TEXT_WARM)
+	name_lbl.clip_text = true
 	col.add_child(name_lbl)
 	var desc := Label.new()
 	desc.text = g.desc
 	desc.add_theme_font_size_override("font_size", 13)
-	desc.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # wrap so it can't push the tag pill off-row
+	desc.add_theme_color_override("font_color", TEXT_SEC)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(desc)
 
-	# Tag pill — vibrant per-game color. Shrink so the column can't push it off.
-	var tag := _tag_pill(g.tag, color, dark)
+	var tag := _tag_pill(g.tag, color)
 	tag.size_flags_horizontal = Control.SIZE_SHRINK_END
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(tag)
 
 	return btn
 
-func _icon_block(game_id: String, color: Color, dark: Color) -> Control:
+func _icon_block(game_id: String, color: Color) -> Control:
 	var holder := Control.new()
-	holder.custom_minimum_size = Vector2(60, 64)  # +4px to allow shadow
+	holder.custom_minimum_size = Vector2(60, 64)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Shadow layer underneath.
 	var bg := PanelContainer.new()
 	bg.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	bg.size = Vector2(60, 60)
 	bg.position = Vector2(0, 4)
 	var shadow_sb := StyleBoxFlat.new()
-	shadow_sb.bg_color = dark
-	shadow_sb.set_corner_radius_all(17)
+	shadow_sb.bg_color = color.darkened(0.15)
+	shadow_sb.set_corner_radius_all(16)
 	bg.add_theme_stylebox_override("panel", shadow_sb)
 	holder.add_child(bg)
-	# Colored top layer with subtle outline glow.
 	var top := PanelContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	top.size = Vector2(60, 60)
 	top.position = Vector2.ZERO
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = color
-	sb.set_corner_radius_all(17)
+	sb.set_corner_radius_all(16)
 	sb.set_border_width_all(2)
-	sb.border_color = Color(1, 1, 1, 0.22)
-	sb.shadow_color = Color(0, 0, 0, 0.25)   # plain dark drop shadow, no colored halo
-	sb.shadow_size = 4
+	sb.border_color = Color(1, 1, 1, 0.3)
 	top.add_theme_stylebox_override("panel", sb)
 	holder.add_child(top)
-	# White glyph icon (SVG).
 	var tex_path := "res://assets/games/%s.svg" % game_id
 	if ResourceLoader.exists(tex_path):
 		var icon := TextureRect.new()
@@ -368,16 +352,13 @@ func _icon_block(game_id: String, color: Color, dark: Color) -> Control:
 		top.add_child(icon)
 	return holder
 
-func _tag_pill(text: String, accent: Color, accent_dark: Color) -> Control:
+func _tag_pill(text: String, accent: Color) -> Control:
 	var pill := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = accent
+	sb.bg_color = Color(accent.r, accent.g, accent.b, 0.12)
 	sb.set_corner_radius_all(99)
-	sb.set_border_width_all(2)
-	sb.border_color = accent_dark
-	sb.shadow_color = Color(0, 0, 0, 0.25)
-	sb.shadow_size = 3
-	sb.shadow_offset = Vector2i(0, 1)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.3)
 	sb.content_margin_left = 10
 	sb.content_margin_right = 10
 	sb.content_margin_top = 4
@@ -385,9 +366,7 @@ func _tag_pill(text: String, accent: Color, accent_dark: Color) -> Control:
 	pill.add_theme_stylebox_override("panel", sb)
 	var lbl := Label.new()
 	lbl.text = text.to_upper()
-	lbl.add_theme_color_override("font_color", Color.WHITE)
-	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.45))
-	lbl.add_theme_constant_override("outline_size", 3)
+	lbl.add_theme_color_override("font_color", accent.darkened(0.1))
 	lbl.add_theme_font_size_override("font_size", 11)
 	pill.add_child(lbl)
 	return pill
