@@ -536,6 +536,20 @@ func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Arra
 		Fx.banner(self, word_upper, Color("#ff3aa8"), Color.WHITE)
 		Fx.shake(self, 3.0, 0.2)
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.35))
+	if _running and _all_words_found():
+		_new_pool()
+
+func _all_words_found() -> bool:
+	for w: String in _possible_words:
+		if not _found.has(w):
+			return false
+	return true
+
+func _new_pool() -> void:
+	Fx.banner(self, "All Found!", Color("#3aa8ff"), Color.WHITE)
+	Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.35))
+	_spawn_wave()
+	_refresh_found()
 
 func _shake_feedback(msg: String) -> void:
 	_show_toast(msg, Palette.RED)
