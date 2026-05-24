@@ -472,16 +472,18 @@ class BoardBG extends Control:
 		for i in plank_count:
 			var y0: float = plank_h * float(i)
 			var y1: float = plank_h * float(i + 1)
-			var bands := 4
+			var bands := 8
 			for s in bands:
 				var t0: float = float(s) / float(bands)
 				var t1: float = float(s + 1) / float(bands)
 				var sy0: float = y0 + (y1 - y0) * t0
 				var sy1: float = y0 + (y1 - y0) * t1
-				var warmth: float = 0.08 * sin(float(i) * 1.7 + float(s) * 0.9)
+				var warmth: float = 0.06 * sin(float(i) * 1.7 + float(s) * 0.9)
 				var shade: Color = wood_light.lerp(wood_dark, t0 * 0.5 + 0.25)
 				shade = Color(shade.r + warmth, shade.g + warmth * 0.6, shade.b, shade.a)
-				var chord: float = maxf(_corner_chord_at_y(sy0, r, size.y), _corner_chord_at_y(sy1, r, size.y))
+				var chord0: float = _corner_chord_at_y(sy0, r, size.y)
+				var chord1: float = _corner_chord_at_y(sy1, r, size.y)
+				var chord: float = maxf(chord0, chord1)
 				if chord < size.x * 0.5:
 					draw_rect(Rect2(Vector2(chord, sy0), Vector2(size.x - chord * 2, sy1 - sy0)), shade)
 			_draw_wood_grain(y0, y1, i)

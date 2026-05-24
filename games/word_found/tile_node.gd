@@ -13,7 +13,7 @@ signal tile_picked_fx(tile: WFoundTile, color: Color)
 enum State { AVAILABLE, MOVED }
 
 const SIZE := 50.0
-const RADIUS := 12.0
+const RADIUS := 10.0
 
 const GREEN_AVAIL_TOP := Color("#5ec46e")
 const GREEN_AVAIL_BOT := Color("#2e8a3e")
@@ -91,16 +91,14 @@ func _draw() -> void:
 	_round_rect(Rect2(Vector2(0, 4), size), Color(bot.r * 0.3, bot.g * 0.3, bot.b * 0.3, 0.6), RADIUS)
 	# Gradient fill.
 	_round_rect_gradient(rect, top, bot, RADIUS)
-	# Glossy sheen — bright highlight band near top.
-	var sheen_rect := Rect2(rect.position + Vector2(4, 3), Vector2(rect.size.x - 8, rect.size.y * 0.32))
-	_round_rect(sheen_rect, Color(1, 1, 1, 0.22), RADIUS - 4)
-	# Secondary inner sheen.
-	var sheen2 := Rect2(rect.position + Vector2(6, 4), Vector2(rect.size.x - 12, rect.size.y * 0.18))
-	_round_rect(sheen2, Color(1, 1, 1, 0.12), RADIUS - 5)
+	# Glossy sheen — arc highlights instead of rects to avoid corner artifacts.
+	var cx := size.x * 0.5
+	draw_arc(Vector2(cx, 6), size.x * 0.38, PI * 1.05, PI * 1.95, 24, Color(1, 1, 1, 0.25), 5.0, true)
+	draw_arc(Vector2(cx, 8), size.x * 0.28, PI * 1.15, PI * 1.85, 20, Color(1, 1, 1, 0.12), 3.0, true)
 	# Bottom 3D edge.
-	_round_rect(Rect2(Vector2(2, size.y - 3), Vector2(size.x - 4, 3)), Color(0, 0, 0, 0.22), RADIUS - 2)
-	# Highlight dot (candy reflection).
-	draw_circle(Vector2(RADIUS + 2, RADIUS + 1), 3.0, Color(1, 1, 1, 0.35))
+	draw_arc(Vector2(cx, size.y - 2), size.x * 0.35, 0.1, PI - 0.1, 20, Color(0, 0, 0, 0.18), 2.0, true)
+	# Highlight dot.
+	draw_circle(Vector2(RADIUS + 2, RADIUS), 2.5, Color(1, 1, 1, 0.35))
 
 	# Border.
 	_round_rect_outline(rect, border_col, RADIUS, 2.5)
@@ -141,7 +139,7 @@ func _round_rect(rect: Rect2, color: Color, radius: float) -> void:
 	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, color)
 
 func _round_rect_gradient(rect: Rect2, top: Color, bot: Color, radius: float) -> void:
-	var bands := 12
+	var bands := 20
 	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
 	for i in bands:
 		var t0: float = float(i) / float(bands)
@@ -149,21 +147,26 @@ func _round_rect_gradient(rect: Rect2, top: Color, bot: Color, radius: float) ->
 		var c := top.lerp(bot, (t0 + t1) * 0.5)
 		var y0 := rect.position.y + rect.size.y * t0
 		var y1 := rect.position.y + rect.size.y * t1
-		var inset: float = 0.0
+		var inset_top: float = 0.0
+		var inset_bot: float = 0.0
 		if y0 < rect.position.y + r:
-			inset = r - (y0 - rect.position.y)
-		elif y1 > rect.position.y + rect.size.y - r:
-			inset = r - ((rect.position.y + rect.size.y) - y1)
-		inset = clampf(inset, 0.0, r)
+			inset_top = r - (y0 - rect.position.y)
+		if y1 > rect.position.y + rect.size.y - r:
+			inset_bot = r - ((rect.position.y + rect.size.y) - y1)
+		var inset: float = maxf(clampf(inset_top, 0.0, r), clampf(inset_bot, 0.0, r))
 		var chord: float = 0.0
 		if inset > 0:
 			chord = r - sqrt(maxf(r * r - (r - inset) * (r - inset), 0.0))
 		draw_rect(Rect2(Vector2(rect.position.x + chord, y0),
 			Vector2(rect.size.x - chord * 2, y1 - y0)), c)
-	draw_circle(rect.position + Vector2(r, r), r, top)
-	draw_circle(rect.position + Vector2(rect.size.x - r, r), r, top)
-	draw_circle(rect.position + Vector2(r, rect.size.y - r), r, bot)
-	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, bot)
+	var t_top: float = r / rect.size.y
+	var t_bot: float = (rect.size.y - r) / rect.size.y
+	var c_top := top.lerp(bot, t_top)
+	var c_bot := top.lerp(bot, t_bot)
+	draw_circle(rect.position + Vector2(r, r), r, c_top)
+	draw_circle(rect.position + Vector2(rect.size.x - r, r), r, c_top)
+	draw_circle(rect.position + Vector2(r, rect.size.y - r), r, c_bot)
+	draw_circle(rect.position + Vector2(rect.size.x - r, rect.size.y - r), r, c_bot)
 
 func _round_rect_outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
 	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
