@@ -467,6 +467,10 @@ func _end_drag() -> void:
 func _try_add_letter_at(gpos: Vector2) -> void:
 	for n in _letters:
 		if n.contains_point(gpos):
+			if _chain.size() >= 2 and _chain[-2] == n:
+				var popped: WMLetter = _chain.pop_back()
+				popped.selected = false
+				return
 			if _chain.has(n):
 				return
 			_chain.append(n)
