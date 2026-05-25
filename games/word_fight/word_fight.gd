@@ -158,19 +158,19 @@ func _build_ui() -> void:
 	arena_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	arena_bg.set_world(_world_idx)
 	add_child(arena_bg)
-	# Dark dungeon-style header matching the arena backdrop.
+	# Compact header for landscape.
 	var hdr_panel := PanelContainer.new()
 	hdr_panel.anchor_right = 1.0
-	hdr_panel.offset_bottom = Chrome.HEADER_H
+	hdr_panel.offset_bottom = 44
 	var hdr_sb := StyleBoxFlat.new()
 	hdr_sb.bg_color = Color(0.06, 0.04, 0.10, 0.85)
 	hdr_sb.shadow_color = Color(0, 0, 0, 0.4)
-	hdr_sb.shadow_size = 6
+	hdr_sb.shadow_size = 4
 	hdr_sb.shadow_offset = Vector2i(0, 2)
-	hdr_sb.content_margin_left = 16
-	hdr_sb.content_margin_right = 16
-	hdr_sb.content_margin_top = 18
-	hdr_sb.content_margin_bottom = 16
+	hdr_sb.content_margin_left = 12
+	hdr_sb.content_margin_right = 12
+	hdr_sb.content_margin_top = 6
+	hdr_sb.content_margin_bottom = 6
 	hdr_panel.add_theme_stylebox_override("panel", hdr_sb)
 	add_child(hdr_panel)
 	var _hdr_row := HBoxContainer.new()
@@ -193,11 +193,11 @@ func _build_ui() -> void:
 	back_btn.add_theme_stylebox_override("hover", empty_sb)
 	back_btn.add_theme_stylebox_override("pressed", empty_sb)
 	back_btn.add_theme_stylebox_override("focus", empty_sb)
-	back_btn.custom_minimum_size = Vector2(48, 48)
+	back_btn.custom_minimum_size = Vector2(36, 36)
 	_hdr_row.add_child(back_btn)
 	var title_lbl := Label.new()
 	title_lbl.text = "Word Fight"
-	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_font_size_override("font_size", 16)
 	title_lbl.add_theme_color_override("font_color", Color("#e0d4c6"))
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hdr_row.add_child(title_lbl)
@@ -229,16 +229,16 @@ func _build_ui() -> void:
 	root.anchor_right = 1.0
 	root.anchor_bottom = 1.0
 	root.offset_left = 6
-	root.offset_top = Chrome.HEADER_H + 4
+	root.offset_top = 48
 	root.offset_right = -6
 	root.offset_bottom = -4
-	root.add_theme_constant_override("separation", 6)
+	root.add_theme_constant_override("separation", 4)
 	add_child(root)
 
 	# Combat row: player column | center board | enemy column.
 	var combat := HBoxContainer.new()
 	combat.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	combat.add_theme_constant_override("separation", 6)
+	combat.add_theme_constant_override("separation", 4)
 	combat.add_child(_combatant_column(true))
 	combat.add_child(_center_column())
 	combat.add_child(_combatant_column(false))
@@ -260,7 +260,7 @@ func _build_ui() -> void:
 	enemy_word_toast.add_theme_stylebox_override("panel", ewt_sb)
 	enemy_word_toast_label = Label.new()
 	enemy_word_toast_label.text = ""
-	enemy_word_toast_label.add_theme_font_size_override("font_size", 36)
+	enemy_word_toast_label.add_theme_font_size_override("font_size", 28)
 	enemy_word_toast_label.add_theme_color_override("font_color", Color.WHITE)
 	enemy_word_toast_label.add_theme_color_override("font_outline_color", Color(1.0, 0.3, 0.4, 0.6))
 	enemy_word_toast_label.add_theme_constant_override("outline_size", 4)
@@ -286,15 +286,15 @@ func _build_ui() -> void:
 func _combatant_column(is_player: bool) -> VBoxContainer:
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.size_flags_stretch_ratio = 0.6
-	col.add_theme_constant_override("separation", 2)
+	col.size_flags_stretch_ratio = 0.55
+	col.add_theme_constant_override("separation", 1)
 	var accent: Color = SAGE if is_player else HP_PINK
 	var accent_dark: Color = SAGE_DARK if is_player else HP_PINK_DARK
 
 	var combatant := Fx.Combatant.new()
 	combatant.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	combatant.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	combatant.custom_minimum_size = Vector2(0, 88)
+	combatant.custom_minimum_size = Vector2(0, 64)
 	var svg: String = ("res://assets/avatars/%s.svg" % GameState.player_avatar) if is_player else _enemy_avatar_path()
 	combatant.setup(svg, 1.0 if is_player else -1.0, accent)
 	col.add_child(combatant)
@@ -303,7 +303,7 @@ func _combatant_column(is_player: bool) -> VBoxContainer:
 	name_lbl.text = (GameState.player_name if GameState.player_name != "" else "You") if is_player else String(_enemy.get("name", "Enemy"))
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.clip_text = true
-	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.add_theme_font_size_override("font_size", 13)
 	name_lbl.add_theme_color_override("font_color", accent_dark)
 	col.add_child(name_lbl)
 
@@ -312,9 +312,9 @@ func _combatant_column(is_player: bool) -> VBoxContainer:
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var value_lbl := Label.new()
 	value_lbl.text = "1000"
-	value_lbl.add_theme_font_size_override("font_size", 15)
+	value_lbl.add_theme_font_size_override("font_size", 13)
 	value_lbl.add_theme_color_override("font_color", Color("#c0b4a6"))
-	value_lbl.custom_minimum_size = Vector2(40, 0)
+	value_lbl.custom_minimum_size = Vector2(36, 0)
 	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var hp_row := HBoxContainer.new()
@@ -349,14 +349,14 @@ func _center_column() -> VBoxContainer:
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 5)
+	col.add_theme_constant_override("separation", 3)
 
 	status_label = Label.new()
 	status_label.text = ""
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.clip_text = true
 	status_label.add_theme_color_override("font_color", Color("#8a7e72"))
-	status_label.add_theme_font_size_override("font_size", 15)
+	status_label.add_theme_font_size_override("font_size", 13)
 	col.add_child(status_label)
 
 	col.add_child(_word_pill())
@@ -365,7 +365,7 @@ func _center_column() -> VBoxContainer:
 	var board_panel := Control.new()
 	board_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	board_panel.custom_minimum_size = Vector2(200, 150)
+	board_panel.custom_minimum_size = Vector2(200, 120)
 	board_bg = Fx.BoardBG.new()
 	board_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -389,10 +389,10 @@ func _word_pill() -> PanelContainer:
 	wp_sb.set_corner_radius_all(18)
 	wp_sb.set_border_width_all(2)
 	wp_sb.border_color = PINK_PILL_BORDER
-	wp_sb.content_margin_left = 14
-	wp_sb.content_margin_right = 14
-	wp_sb.content_margin_top = 3
-	wp_sb.content_margin_bottom = 3
+	wp_sb.content_margin_left = 12
+	wp_sb.content_margin_right = 12
+	wp_sb.content_margin_top = 2
+	wp_sb.content_margin_bottom = 2
 	wp_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.2)
 	wp_sb.shadow_size = 5
 	wp_sb.shadow_offset = Vector2i(0, 2)
@@ -404,14 +404,14 @@ func _word_pill() -> PanelContainer:
 	current_word_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	current_word_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	current_word_label.add_theme_color_override("font_color", HP_PINK_DARK)
-	current_word_label.add_theme_font_size_override("font_size", 22)
+	current_word_label.add_theme_font_size_override("font_size", 18)
 	word_col.add_child(current_word_label)
 	dmg_preview_label = Label.new()
 	dmg_preview_label.text = ""
 	dmg_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dmg_preview_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dmg_preview_label.add_theme_color_override("font_color", SAGE_DARK)
-	dmg_preview_label.add_theme_font_size_override("font_size", 14)
+	dmg_preview_label.add_theme_font_size_override("font_size", 12)
 	word_col.add_child(dmg_preview_label)
 	word_pill.add_child(word_col)
 	return word_pill
@@ -443,10 +443,10 @@ func _actions_bar() -> HBoxContainer:
 	rb_sb.shadow_color = Color(0, 0, 0, 0.3)
 	rb_sb.shadow_size = 4
 	rb_sb.shadow_offset = Vector2i(0, 2)
-	rb_sb.content_margin_left = 16
-	rb_sb.content_margin_right = 16
-	rb_sb.content_margin_top = 12
-	rb_sb.content_margin_bottom = 12
+	rb_sb.content_margin_left = 14
+	rb_sb.content_margin_right = 14
+	rb_sb.content_margin_top = 8
+	rb_sb.content_margin_bottom = 8
 	var rb_press := rb_sb.duplicate() as StyleBoxFlat
 	rb_press.bg_color = Color("#1a1220")
 	rb_press.shadow_size = 1
@@ -463,7 +463,7 @@ func _actions_bar() -> HBoxContainer:
 	var submit_wrap := Control.new()
 	submit_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	submit_wrap.size_flags_stretch_ratio = 2.0
-	submit_wrap.custom_minimum_size = Vector2(0, 64)
+	submit_wrap.custom_minimum_size = Vector2(0, 48)
 	submit_glow = Panel.new()
 	submit_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	submit_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -488,9 +488,9 @@ func _attack_button(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(0, 64)
+	b.custom_minimum_size = Vector2(0, 48)
 	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	b.add_theme_font_size_override("font_size", 19)
+	b.add_theme_font_size_override("font_size", 17)
 	b.add_theme_color_override("font_color", Color.WHITE)
 	b.add_theme_color_override("font_hover_color", Color("#ffe0e4"))
 	b.add_theme_color_override("font_pressed_color", Color("#ffc0c8"))
@@ -503,10 +503,10 @@ func _attack_button(text: String) -> Button:
 	sb.shadow_color = Color(0.6, 0.1, 0.15, 0.4)
 	sb.shadow_size = 6
 	sb.shadow_offset = Vector2i(0, 3)
-	sb.content_margin_left = 24
-	sb.content_margin_right = 24
-	sb.content_margin_top = 14
-	sb.content_margin_bottom = 14
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
 	var press := sb.duplicate() as StyleBoxFlat
 	press.bg_color = Color("#801e2e")
 	press.shadow_size = 2
@@ -531,7 +531,7 @@ func _hp_bar(fill: Color, _mirrored: bool = false) -> ProgressBar:
 	bar.max_value = 100
 	bar.value = 100
 	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(0, 20)
+	bar.custom_minimum_size = Vector2(0, 16)
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = HP_BG
 	bg.set_corner_radius_all(99)
