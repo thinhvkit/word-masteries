@@ -109,7 +109,6 @@ var _topic: String = "food"
 var _player_streak_5plus: int = 0
 var _player_word_streak: int = 0
 var _rainbows: int = 0
-var _used_words: Dictionary = {}       # word(lower) -> true, per-enemy
 var _is_player_turn: bool = true
 var _busy: bool = false                # animations/AI
 var _rainbow_auto_busy: bool = false
@@ -566,7 +565,6 @@ func _start_battle(idx: int) -> void:
 	var seeded: String = String(GameState.wf_session.get("topic", ""))
 	_topic = seeded if not seeded.is_empty() else Worlds.random_topic(_world_idx)
 	GameState.wf_session["topic"] = _topic
-	_used_words.clear()
 	_player_streak_5plus = 0
 	_player_word_streak = 0
 	_rainbow_auto_busy = false
@@ -794,11 +792,8 @@ func _submit_player_word() -> void:
 	if word_up.length() < MIN_WORD_LEN:
 		return
 	var word := word_up.to_lower()
-	if _used_words.has(word):
-		_flash_invalid("Already used: %s" % word_up); return
 	if not Words.is_valid(word):
 		_flash_invalid("Not a word: %s" % word_up); return
-	_used_words[word] = true
 
 	var topic_match := Topics.has(_topic, word)
 	var fire_count := 0
@@ -992,7 +987,6 @@ func _enemy_turn() -> void:
 	if topic_match:
 		raw_dmg = int(raw_dmg * TOPIC_MULTIPLIER)
 	var dmg := _damage_player(raw_dmg)
-	_used_words[word] = true
 	var action_text := "%s → %d dmg" % [word.to_upper(), dmg]
 	if topic_match:
 		action_text += "  ×2!"
@@ -1222,13 +1216,10 @@ func _enemy_pick_word_async(skill: float) -> Dictionary:
 	var candidates: Array[String] = holder[0]
 	# Filter unused and verify a tile-index path actually exists (it does because
 	# words_from_letters checks letter multiplicity).
-	var fresh: Array[String] = []
-	for w in candidates:
-		if not _used_words.has(w):
-			fresh.append(w)
-	if fresh.is_empty():
+	if candidates.is_empty():
 		return {}
-	fresh.sort_custom(func(a, b): return a.length() > b.length())
+	candidates.sort_custom(func(a, b): return a.length() > b.length())
+	var fresh := candidates
 	# Skill-based pick: high skill picks near the top, low skill picks shorter words.
 	var max_len: int = fresh[0].length()
 	# Cap enemy max length so it doesn't always one-shot.
@@ -1481,12 +1472,9 @@ func _rainbow_pick_best_word() -> Dictionary:
 		await get_tree().process_frame
 	WorkerThreadPool.wait_for_task_completion(task_id)
 	var candidates: Array[String] = holder[0]
-	var fresh: Array[String] = []
-	for w in candidates:
-		if not _used_words.has(w):
-			fresh.append(w)
-	if fresh.is_empty():
+	if candidates.is_empty():
 		return {}
+	var fresh := candidates
 	fresh.sort_custom(func(a: String, b: String) -> bool:
 		var da := _word_damage(a.length())
 		var db := _word_damage(b.length())
