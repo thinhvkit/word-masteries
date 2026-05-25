@@ -113,6 +113,7 @@ var _row2_pill: PanelContainer
 var _words_count_lbl: Label
 var _total_words: int = 0
 var _pool_letters: String = ""
+var _used_pools: Array = []          # pools already used this session
 var _row1_tiles: Array = []          # all 10-12 tiles in Row 1; their state tells the rest
 var _row2_chain: Array = []          # ordered subset currently in Row 2
 var _targets: Array = []             # [{"count":N,"len":L,"done":k}, ...]
@@ -501,14 +502,18 @@ func _pick_pool(template: Array) -> Dictionary:
 	var attempts := POOLS.duplicate()
 	attempts.shuffle()
 	for p: String in attempts:
-		if p == _pool_letters:
+		if _used_pools.has(p):
 			continue
 		var avail := _bucket_words(p)
 		if _template_satisfiable(template, avail):
+			_used_pools.append(p)
 			return {"pool": p, "targets": _annotate_targets(template)}
+	_used_pools.clear()
+	attempts.shuffle()
 	for p: String in attempts:
 		var avail := _bucket_words(p)
 		if _template_satisfiable(template, avail):
+			_used_pools.append(p)
 			return {"pool": p, "targets": _annotate_targets(template)}
 	return {"pool": "STREAMING", "targets": _annotate_targets(template)}
 

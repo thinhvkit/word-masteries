@@ -6,33 +6,32 @@ extends RefCounted
 const TILE_SIZE := 56.0
 const TILE_RADIUS := 12.0
 
-# ---- letter color tiers (vibrant board, cozy frame) -----------------------
-const VOWEL_TOP    := Color("#ffe27a")
-const VOWEL_BOTTOM := Color("#ffb330")
-const VOWEL_INK    := Color("#7a4a00")
+# ---- letter color tiers (neutral gray so gem tiles pop) --------------------
+const VOWEL_TOP    := Color("#e8e4e0")
+const VOWEL_BOTTOM := Color("#c8c2ba")
+const VOWEL_INK    := Color("#4a4440")
 
-const COMMON_TOP    := Color("#a8e7ff")
-const COMMON_BOTTOM := Color("#3aa8ff")
-const COMMON_INK    := Color("#093762")
+const COMMON_TOP    := Color("#e8e4e0")
+const COMMON_BOTTOM := Color("#c8c2ba")
+const COMMON_INK    := Color("#4a4440")
 
-const UNCOMMON_TOP    := Color("#c7b6ff")
-const UNCOMMON_BOTTOM := Color("#7a55ff")
-const UNCOMMON_INK    := Color("#2b1466")
+const UNCOMMON_TOP    := Color("#e8e4e0")
+const UNCOMMON_BOTTOM := Color("#c8c2ba")
+const UNCOMMON_INK    := Color("#4a4440")
 
-const RARE_TOP    := Color("#ffb3e0")
-const RARE_BOTTOM := Color("#ff3aa8")
-const RARE_INK    := Color("#5e0e3a")
+const RARE_TOP    := Color("#e8e4e0")
+const RARE_BOTTOM := Color("#c8c2ba")
+const RARE_INK    := Color("#4a4440")
 
 # Selected tiles use a unified hot pink/magenta gradient.
 const SELECT_TOP    := Color("#ff7ad1")
 const SELECT_BOTTOM := Color("#c81f8c")
 const SELECT_INK    := Color("#ffffff")
 
-# Every normal (non-gem) tile shares this one warm-cream gradient, so the
-# saturated gem tiles are the only ones that read as special.
-const NORMAL_TILE_TOP    := Color("#fff7ec")
-const NORMAL_TILE_BOTTOM := Color("#ecdfca")
-const NORMAL_TILE_INK    := Color("#5a4840")
+# Every normal (non-gem) tile shares this neutral gray so gem tiles pop.
+const NORMAL_TILE_TOP    := Color("#e8e4e0")
+const NORMAL_TILE_BOTTOM := Color("#c8c2ba")
+const NORMAL_TILE_INK    := Color("#4a4440")
 
 const VOWELS := "AEIOU"
 const COMMON := "NRTLSDG"

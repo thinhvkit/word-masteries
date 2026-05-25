@@ -67,6 +67,7 @@ var _found: Dictionary = {}        # word -> true
 var _found_order: Array = []       # in order discovered, for results screen
 var _is_dragging: bool = false
 var _pool: String = ""             # current round pool
+var _used_pools: Array = []        # pools already used this session
 var _possible_words: Array = []    # all formable words from pool (length-desc)
 
 func _ready() -> void:
@@ -346,8 +347,12 @@ func _pick_pool() -> String:
 		src = POOLS_7 + POOLS_8
 	src.shuffle()
 	for p: String in src:
-		if p != _pool:
+		if not _used_pools.has(p):
+			_used_pools.append(p)
 			return p
+	_used_pools.clear()
+	src.shuffle()
+	_used_pools.append(src[0])
 	return src[0]
 
 func _spawn_letters(pool: String) -> void:
