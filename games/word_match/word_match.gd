@@ -1,9 +1,13 @@
 extends Control
-## Word Match — 6–8 letters in a circle, drag to form words.
+## Word Match — wave-based word chase with combo, lives, targets, and specials.
 
 const LETTER_SCENE_SIZE := 87.0
-const ROUND_TIME_SEC := 120.0
+const WAVE_TIME_SEC := 40.0
 const MIN_WORD_LEN := 3
+const MAX_LIVES_INTERMEDIATE := 3
+const MAX_LIVES_ADVANCED := 2
+const COMBO_WINDOW_INTERMEDIATE := 6.0
+const COMBO_WINDOW_ADVANCED := 4.0
 
 # Curated letter pools known to produce many valid sub-words.
 # (Picked to satisfy the vowel guarantee — each has ≥2 vowels.)
@@ -20,6 +24,15 @@ const POOLS_8 := [
 	"REACTION", "TEACHERS", "STRANGER", "MOUNTAIN", "RAINBOWS",
 	"PAINTERS", "PLANETSS", "STARTERS",
 ]
+
+const GOAL_TYPES := ["word_count", "long_words", "xp_target", "speed_burst", "use_special", "no_mistakes"]
+const BASE_LENGTH_SCORE := {3: 10, 4: 20, 5: 40, 6: 80, 7: 160}
+const TARGET_REWARD := {3: 40, 4: 80, 5: 150, 6: 300, 7: 600}
+const SECRET_WORDS := {
+	"nature": ["earth", "rain", "garden", "stream", "plant", "stone", "storm"],
+	"food": ["orange", "meat", "toast", "pear", "tea"],
+	"animals": ["horse", "mole", "rat", "tern", "lion"],
+}
 
 const UI := preload("res://scripts/results_ui.gd")
 const Chrome := preload("res://scripts/screen_chrome.gd")
@@ -55,6 +68,12 @@ var preview_label: Label
 var score_label: Label
 var timer_label: Label
 var timer_chip: Control
+var wave_label: Label
+var lives_label: Label
+var combo_label: Label
+var goal_label: Label
+var target_label: Label
+var powers_label: Label
 var found_label: Label
 var found_pills_row: HFlowContainer
 var line: Line2D
@@ -75,11 +94,12 @@ var _word_card_flash_id: int = 0
 
 var _letters: Array[WMLetter] = []
 var _chain: Array[WMLetter] = []   # ordered nodes selected
-var _time_left: float = ROUND_TIME_SEC
+var _time_left: float = WAVE_TIME_SEC
 var _running: bool = false
 var _score: int = 0
 var _found: Dictionary = {}        # word -> true
 var _found_order: Array = []       # in order discovered, for results screen
+var _fever_words: Dictionary = {}
 var _is_dragging: bool = false
 var _is_shuffling: bool = false
 var _submittable_announced: bool = false
@@ -88,6 +108,37 @@ var _idle_phase: float = 0.0
 var _pool: String = ""             # current round pool
 var _used_pools: Array = []        # pools already used this session
 var _possible_words: Array = []    # all formable words from pool (length-desc)
+var _wave: int = 1
+var _lives: int = MAX_LIVES_INTERMEDIATE
+var _max_lives: int = MAX_LIVES_INTERMEDIATE
+var _wave_failures: int = 0
+var _carry_time: float = 0.0
+var _wave_score_start: int = 0
+var _wave_words_start: int = 0
+var _wave_invalids: int = 0
+var _wave_lives_lost: int = 0
+var _combo: int = 0
+var _best_combo_this_wave: int = 0
+var _combo_time_left: float = 0.0
+var _fever_active: bool = false
+var _fever_pause_left: float = 0.0
+var _goal_type: String = "word_count"
+var _goal_target: int = 0
+var _goal_progress: int = 0
+var _speed_words: int = 0
+var _speed_time_left: float = 0.0
+var _wave_transitioning: bool = false
+var _target_word: String = ""
+var _target_found: bool = false
+var _secret_words: Dictionary = {}
+var _powerups: Array[String] = []
+var _used_special_this_wave: bool = false
+var _fire_tile: WMLetter
+var _poison_tile: WMLetter
+var _fire_time_left: float = 0.0
+var _poison_time_left: float = 0.0
+var _double_xp_left: float = 0.0
+var _freeze_left: float = 0.0
 
 func _ready() -> void:
 	_build_ui()
@@ -103,7 +154,8 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	Chrome.bg_layer(self)
-	back_btn = Chrome.header(self, "Word Match", "word_match", BLUE_LIGHT, BLUE_DARK)
+	back_btn = Chrome.header(self, "Word Match")
+	_build_mascot()
 
 	# Top stack (HUD chips, found card, current word).
 	var top := VBoxContainer.new()
@@ -111,16 +163,20 @@ func _build_ui() -> void:
 	top.offset_left = 16
 	top.offset_top = Chrome.HEADER_H + 12
 	top.offset_right = -16
-	top.offset_bottom = 320
+	top.offset_bottom = 390
 	top.add_theme_constant_override("separation", 12)
 	add_child(top)
 
 	# Timer + XP chips row.
 	var hud := HBoxContainer.new()
-	hud.add_theme_constant_override("separation", 12)
+	hud.add_theme_constant_override("separation", 8)
+	wave_label = _hud_chip("W1", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK, "res://assets/icons/wave.svg")
+	hud.add_child(wave_label.get_parent().get_parent())
 	timer_label = _hud_chip("2:00", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK, "res://assets/icons/clock.svg")
 	timer_chip = timer_label.get_parent().get_parent() as Control
 	hud.add_child(timer_chip)
+	lives_label = _hud_chip("3 lives", ERROR_RED, Color.WHITE, Color("#a21d2d"), "res://assets/icons/heart_broken.svg")
+	hud.add_child(lives_label.get_parent().get_parent())
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hud.add_child(spacer)
@@ -150,8 +206,30 @@ func _build_ui() -> void:
 	found_label.add_theme_color_override("font_color", Color("#ffd027"))
 	found_label.add_theme_font_size_override("font_size", 16)
 	found_box.add_child(found_label)
+	combo_label = Label.new()
+	combo_label.text = "Combo: x1"
+	combo_label.add_theme_color_override("font_color", Color("#ffb347"))
+	combo_label.add_theme_font_size_override("font_size", 15)
+	found_box.add_child(combo_label)
+	goal_label = Label.new()
+	goal_label.text = "Goal"
+	goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	goal_label.add_theme_color_override("font_color", Color.WHITE)
+	goal_label.add_theme_font_size_override("font_size", 16)
+	found_box.add_child(goal_label)
+	target_label = Label.new()
+	target_label.text = "Target: _ _ _"
+	target_label.add_theme_color_override("font_color", Color("#a7f8ff"))
+	target_label.add_theme_font_size_override("font_size", 15)
+	found_box.add_child(target_label)
+	powers_label = Label.new()
+	powers_label.text = "Power-ups: -"
+	powers_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	powers_label.add_theme_color_override("font_color", Color("#d8ffd8"))
+	powers_label.add_theme_font_size_override("font_size", 14)
+	found_box.add_child(powers_label)
 	var hint := Label.new()
-	hint.text = "Drag to form words!"
+	hint.text = "Chain words, clear the wave goal, protect your lives."
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
 	hint.add_theme_font_size_override("font_size", 17)
 	found_box.add_child(hint)
@@ -201,7 +279,7 @@ func _build_ui() -> void:
 	# stack and the footer hint — the previously-fixed 444×444 box left big
 	# empty bands on tall screens. The ring's radius is derived from the
 	# holder size, so a larger holder = larger ring automatically.
-	const BOARD_AREA_TOP := 340   # below the HUD + found card + current-word pill
+	const BOARD_AREA_TOP := 410   # below the HUD + found card + current-word pill
 	const BOARD_AREA_BOTTOM := -48  # above the footer hint
 	const BOARD_AREA_INSET := 8
 	board_bg = Fx.BoardBG.new()
@@ -216,7 +294,6 @@ func _build_ui() -> void:
 	board_bg.offset_bottom = BOARD_AREA_BOTTOM
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(board_bg)
-	_build_mascot(Chrome.HEADER_H + BOARD_AREA_TOP + 12)
 
 	# Letters holder shares the same rect so taps land naturally over the ring.
 	letters_holder = Control.new()
@@ -310,16 +387,16 @@ func _build_ui() -> void:
 	dim_overlay.z_index = 260
 	add_child(dim_overlay)
 
-func _build_mascot(top_y: float) -> void:
+func _build_mascot() -> void:
 	mascot = Control.new()
 	mascot.anchor_left = 1.0
 	mascot.anchor_right = 1.0
-	mascot.offset_left = -104
-	mascot.offset_right = -16
-	mascot.offset_top = top_y
-	mascot.offset_bottom = top_y + 96
+	mascot.offset_left = -118
+	mascot.offset_right = -12
+	mascot.offset_top = 0
+	mascot.offset_bottom = Chrome.HEADER_H
 	mascot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mascot.z_index = 90
+	mascot.z_index = 120
 	add_child(mascot)
 
 	var bubble := PanelContainer.new()
@@ -331,10 +408,10 @@ func _build_mascot(top_y: float) -> void:
 	sb.content_margin_top = 5
 	sb.content_margin_bottom = 5
 	bubble.add_theme_stylebox_override("panel", sb)
-	bubble.position = Vector2(-92, 0)
-	bubble.custom_minimum_size = Vector2(86, 30)
+	bubble.position = Vector2(-82, 10)
+	bubble.custom_minimum_size = Vector2(82, 28)
 	bubble.scale = Vector2(0.0, 0.0)
-	bubble.pivot_offset = Vector2(80, 28)
+	bubble.pivot_offset = Vector2(76, 26)
 	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mascot_speech = bubble
 	mascot.add_child(bubble)
@@ -348,8 +425,8 @@ func _build_mascot(top_y: float) -> void:
 	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
 	if ResourceLoader.exists(path):
 		mascot_icon.texture = load(path)
-	mascot_icon.position = Vector2(12, 28)
-	mascot_icon.size = Vector2(70, 70)
+	mascot_icon.position = Vector2(52, 10)
+	mascot_icon.size = Vector2(48, 48)
 	mascot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	mascot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	mascot_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -397,20 +474,51 @@ func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0
 
 func _start_round() -> void:
 	_score = 0
-	_time_left = ROUND_TIME_SEC
+	_wave = 1
+	_max_lives = MAX_LIVES_INTERMEDIATE if GameState.mode == GameState.Mode.INTERMEDIATE else MAX_LIVES_ADVANCED
+	_lives = _max_lives
+	_wave_failures = 0
+	_carry_time = 0.0
+	_combo = 0
+	_combo_time_left = 0.0
+	_fever_active = false
+	_powerups.clear()
 	_running = true
-	_submittable_announced = false
-	_last_timer_second = int(ceil(ROUND_TIME_SEC))
 	_found.clear()
 	_found_order.clear()
+	if dim_overlay != null:
+		dim_overlay.color = Color(0, 0, 0, 0.0)
+	_start_wave()
+
+func _start_wave() -> void:
+	_wave_transitioning = false
+	_time_left = WAVE_TIME_SEC + _carry_time
+	_carry_time = 0.0
+	_submittable_announced = false
+	_last_timer_second = int(ceil(_time_left))
+	_wave_score_start = _score
+	_wave_words_start = _found_order.size()
+	_wave_invalids = 0
+	_wave_lives_lost = 0
+	_best_combo_this_wave = 0
+	_goal_progress = 0
+	_speed_words = 0
+	_speed_time_left = 10.0
+	_target_found = false
+	_used_special_this_wave = false
+	_fire_tile = null
+	_poison_tile = null
+	_fire_time_left = 0.0
+	_poison_time_left = 0.0
+	_select_goal()
 	_spawn_wave()
+	_pick_targets()
 	_refresh_hud()
 	_refresh_found()
+	_refresh_goal_ui()
 	preview_label.text = "—"
 	_update_xp_preview()
 	_reset_word_card_style()
-	if dim_overlay != null:
-		dim_overlay.color = Color(0, 0, 0, 0.0)
 
 func _spawn_wave() -> void:
 	for c in _letters:
@@ -429,11 +537,7 @@ func _spawn_wave() -> void:
 	_layout_letters()
 
 func _pick_pool() -> String:
-	var src: Array
-	if GameState.mode == GameState.Mode.INTERMEDIATE:
-		src = POOLS_6 + POOLS_7
-	else:
-		src = POOLS_7 + POOLS_8
+	var src: Array = POOLS_7.duplicate()
 	src.shuffle()
 	for p: String in src:
 		if not _used_pools.has(p):
@@ -443,6 +547,54 @@ func _pick_pool() -> String:
 	src.shuffle()
 	_used_pools.append(src[0])
 	return src[0]
+
+func _select_goal() -> void:
+	var goals := GOAL_TYPES.duplicate()
+	if _wave < 4:
+		goals.erase("use_special")
+	goals.shuffle()
+	_goal_type = goals[0]
+	match _goal_type:
+		"word_count":
+			_goal_target = 4 + mini(_wave / 3, 4)
+		"long_words":
+			_goal_target = 2 + mini(_wave / 5, 3)
+		"xp_target":
+			_goal_target = int(120.0 * _wave_multiplier())
+		"speed_burst":
+			_goal_target = 3
+			_speed_time_left = 10.0
+		"use_special":
+			_goal_target = 1
+		"no_mistakes":
+			_goal_target = 4 + mini(_wave / 4, 3)
+		_:
+			_goal_target = 4
+
+func _pick_targets() -> void:
+	_target_word = ""
+	_secret_words.clear()
+	var choices: Array = []
+	for w: String in _possible_words:
+		if w.length() >= 4:
+			choices.append(w)
+	if choices.is_empty():
+		choices = _possible_words.duplicate()
+	if not choices.is_empty():
+		choices.shuffle()
+		_target_word = str(choices[0])
+	var secrets: Array = []
+	var themed := []
+	for key in SECRET_WORDS.keys():
+		themed.append_array(SECRET_WORDS[key])
+	for w: String in _possible_words:
+		if w == _target_word:
+			continue
+		if w.length() >= 5 or themed.has(w):
+			secrets.append(w)
+	secrets.shuffle()
+	for i in mini(3, secrets.size()):
+		_secret_words[secrets[i]] = true
 
 func _spawn_letters(pool: String) -> void:
 	# Shuffle letters but enforce vowel guarantee: at least 2 vowels visible.
@@ -460,6 +612,55 @@ func _spawn_letters(pool: String) -> void:
 		n.letter_selected_fx.connect(_on_letter_selected_fx)
 		letters_holder.add_child(n)
 		_letters.append(n)
+	_assign_special_tiles()
+
+func _assign_special_tiles() -> void:
+	for n in _letters:
+		n.tile_kind = WMLetter.TileKind.REGULAR
+	var special_count := _special_count_for_wave()
+	var candidates := _letters.duplicate()
+	candidates.shuffle()
+	if _powerups.has("Wild") and not candidates.is_empty():
+		var wild: WMLetter = candidates.pop_back()
+		wild.tile_kind = WMLetter.TileKind.WILD
+		_powerups.erase("Wild")
+	if _wave >= 4 and special_count > 0 and not candidates.is_empty():
+		_fire_tile = candidates.pop_back()
+		_fire_tile.tile_kind = WMLetter.TileKind.FIRE
+		_fire_time_left = _fire_timer_for_wave()
+		special_count -= 1
+	if ((GameState.mode == GameState.Mode.ADVANCED and _wave >= 2) or _wave >= 4) and special_count > 0 and not candidates.is_empty():
+		_poison_tile = candidates.pop_back()
+		_poison_tile.tile_kind = WMLetter.TileKind.POISON
+		_poison_time_left = 20.0
+		special_count -= 1
+	if _wave >= 2 and special_count > 0 and not candidates.is_empty():
+		candidates.pop_back().tile_kind = WMLetter.TileKind.GOLD
+		special_count -= 1
+	if _combo >= 3 and special_count > 0 and not candidates.is_empty():
+		candidates.pop_back().tile_kind = WMLetter.TileKind.DIAMOND
+
+func _special_count_for_wave() -> int:
+	if _wave <= 3:
+		return 0
+	if _wave <= 6:
+		return 1
+	if _wave <= 10:
+		return 1 + int(randf() < 0.45)
+	if _wave <= 15:
+		return 2
+	return 2 + int(randf() < 0.45)
+
+func _fire_timer_for_wave() -> float:
+	if GameState.mode == GameState.Mode.ADVANCED:
+		return 20.0
+	if _wave >= 16:
+		return 15.0
+	if _wave >= 11:
+		return 20.0
+	if _wave >= 7:
+		return 25.0
+	return 30.0
 
 func _on_letter_selected_fx(node: WMLetter, color: Color) -> void:
 	var pos := node.global_position + node.size * 0.5 - global_position
@@ -528,19 +729,65 @@ func _process(delta: float) -> void:
 		line.default_color = Color(1.0, 0.45, 0.75, pulse)
 		line.width = 8 + 2 * sin(_line_phase * 0.6)
 	_update_idle_letters()
-	if not _running:
+	if not _running or _wave_transitioning:
 		return
-	_time_left -= delta
+	_update_combo_timer(delta)
+	_update_special_timers(delta)
+	if _goal_type == "speed_burst" and _goal_progress < _goal_target:
+		_speed_time_left = maxf(0.0, _speed_time_left - delta)
+		if _speed_time_left <= 0.0:
+			_speed_words = 0
+			_goal_progress = 0
+			_speed_time_left = 10.0
+	if _double_xp_left > 0.0:
+		_double_xp_left = maxf(0.0, _double_xp_left - delta)
+	if _freeze_left > 0.0:
+		_freeze_left = maxf(0.0, _freeze_left - delta)
+	elif _fever_pause_left > 0.0:
+		_fever_pause_left = maxf(0.0, _fever_pause_left - delta)
+	else:
+		_time_left -= delta
 	if _time_left <= 0:
 		_time_left = 0
-		_end_round()
+		_fail_wave("Time!")
 	_refresh_hud()
+
+func _update_combo_timer(delta: float) -> void:
+	if _combo <= 0 or _is_dragging:
+		return
+	_combo_time_left = maxf(0.0, _combo_time_left - delta)
+	if _combo_time_left <= 0.0:
+		_break_combo(true)
+
+func _update_special_timers(delta: float) -> void:
+	if _fire_tile != null:
+		_fire_time_left = maxf(0.0, _fire_time_left - delta)
+		if _fire_time_left <= 0.0:
+			var burned := _fire_tile
+			_fire_tile = null
+			burned.tile_kind = WMLetter.TileKind.REGULAR
+			_lose_life("Fire burned out")
+	if _poison_tile != null:
+		_poison_time_left = maxf(0.0, _poison_time_left - delta)
+		if _poison_time_left <= 0.0:
+			var expired := _poison_tile
+			_poison_tile = null
+			expired.tile_kind = WMLetter.TileKind.REGULAR
+			_lose_life("Poison expired")
+	_refresh_goal_ui()
 
 func _refresh_hud() -> void:
 	var m := int(_time_left) / 60
 	var s := int(_time_left) % 60
 	timer_label.text = "%d:%02d" % [m, s]
 	score_label.text = "%d XP" % _score
+	if wave_label != null:
+		wave_label.text = "W%d" % _wave
+	if lives_label != null:
+		lives_label.text = "%d lives" % _lives
+	if combo_label != null:
+		var suffix := " FEVER" if _fever_active else ""
+		combo_label.text = "Combo: x%d%s" % [maxi(1, _combo), suffix]
 	var sec_left := int(ceil(_time_left))
 	if sec_left != _last_timer_second:
 		_last_timer_second = sec_left
@@ -563,7 +810,58 @@ func _refresh_found() -> void:
 	if _found.is_empty():
 		return
 	for w: String in _found_order:
-		found_pills_row.add_child(UI.pill(w, Color("#ffd027"), Color("#3a2a78")))
+		var shown := ("FIRE " if _fever_words.has(w.to_lower()) else "") + w
+		found_pills_row.add_child(UI.pill(shown, Color("#ffd027"), Color("#3a2a78")))
+
+func _refresh_goal_ui() -> void:
+	if goal_label != null:
+		goal_label.text = "Goal: %s" % _goal_text()
+	if target_label != null:
+		var hint := _target_silhouette()
+		target_label.text = "Target: %s" % hint
+	if powers_label != null:
+		var bits: Array[String] = []
+		for p in _powerups:
+			bits.append(str(p))
+		if _fire_tile != null:
+			bits.append("Fire %.0fs" % _fire_time_left)
+		if _poison_tile != null:
+			bits.append("Poison %.0fs" % _poison_time_left)
+		if _double_xp_left > 0.0:
+			bits.append("Double %.0fs" % _double_xp_left)
+		if _freeze_left > 0.0:
+			bits.append("Freeze %.0fs" % _freeze_left)
+		powers_label.text = "Power-ups: %s" % (" - " if bits.is_empty() else ", ".join(bits))
+
+func _goal_text() -> String:
+	match _goal_type:
+		"word_count":
+			return "Find %d words (%d/%d)" % [_goal_target, _goal_progress, _goal_target]
+		"long_words":
+			return "Find %d words of 4+ letters (%d/%d)" % [_goal_target, _goal_progress, _goal_target]
+		"xp_target":
+			return "Earn %d XP this wave (%d/%d)" % [_goal_target, _goal_progress, _goal_target]
+		"speed_burst":
+			return "Find 3 words in 10s (%d/3, %.0fs)" % [_speed_words, maxf(_speed_time_left, 0)]
+		"use_special":
+			return "Use a special tile (%d/1)" % _goal_progress
+		"no_mistakes":
+			return "Find %d words with no mistakes (%d/%d)" % [_goal_target, _goal_progress, _goal_target]
+		_:
+			return "Find words"
+
+func _target_silhouette() -> String:
+	if _target_word.is_empty():
+		return "-"
+	if _target_found:
+		return _target_word.to_upper()
+	var parts: Array[String] = []
+	for i in _target_word.length():
+		if GameState.mode == GameState.Mode.INTERMEDIATE and i == 0:
+			parts.append(_target_word.substr(0, 1).to_upper())
+		else:
+			parts.append("_")
+	return " ".join(parts)
 
 # -------- input / drag chain --------
 
@@ -610,22 +908,28 @@ func _end_drag() -> void:
 	_is_dragging = false
 	line.clear_points()
 	line_glow.clear_points()
-	var word := _current_word()
+	var chain_nodes := _chain.duplicate()
 	# Capture chain positions for confetti BEFORE deselect.
 	var chain_positions: Array = []
 	var chain_colors: Array = []
-	for n in _chain:
+	for n in chain_nodes:
 		chain_positions.append(n.global_position + n.size * 0.5 - global_position)
 		var g := Fx.gradient_for_letter(n.letter)
 		chain_colors.append(g[1])
 		n.selected = false
 	_chain.clear()
-	if word.length() < MIN_WORD_LEN:
+	if chain_nodes.size() < MIN_WORD_LEN:
 		_short_drag_feedback()
 		preview_label.text = "—"
 		_update_xp_preview()
 		return
-	_submit(word, chain_positions, chain_colors)
+	var word := _resolve_chain_word(chain_nodes)
+	if word.is_empty():
+		_invalid_word_feedback()
+		preview_label.text = "—"
+		_update_xp_preview()
+		return
+	_submit(word.to_upper(), chain_positions, chain_colors, chain_nodes)
 	preview_label.text = "—"
 	_update_xp_preview()
 
@@ -683,7 +987,12 @@ func _update_line(cursor_gpos: Vector2) -> void:
 func _current_word() -> String:
 	var s := ""
 	for n in _chain:
-		s += n.letter
+		if n.tile_kind == WMLetter.TileKind.WILD:
+			s += "*"
+		elif n.tile_kind == WMLetter.TileKind.POISON:
+			s += "?"
+		else:
+			s += n.letter
 	return s
 
 func _update_preview() -> void:
@@ -692,7 +1001,48 @@ func _update_preview() -> void:
 
 # -------- scoring --------
 
-func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Array = []) -> void:
+func _resolve_chain_word(chain_nodes: Array) -> String:
+	var raw := ""
+	var has_wildcards := false
+	for n: WMLetter in chain_nodes:
+		raw += n.letter
+		if n.tile_kind == WMLetter.TileKind.WILD or n.tile_kind == WMLetter.TileKind.POISON:
+			has_wildcards = true
+	if not has_wildcards:
+		return raw if Words.is_valid(raw.to_lower()) else ""
+	var candidates: Array[String] = []
+	for w: String in _possible_words:
+		if w.length() == chain_nodes.size() and _chain_matches_word(chain_nodes, w):
+			candidates.append(w)
+	candidates.sort_custom(func(a, b):
+		var af := _found.has(a)
+		var bf := _found.has(b)
+		if af != bf:
+			return not af
+		return a < b
+	)
+	if not candidates.is_empty():
+		return candidates[0].to_upper()
+	return raw if Words.is_valid(raw.to_lower()) and _chain_matches_word(chain_nodes, raw.to_lower()) else ""
+
+func _chain_matches_word(chain_nodes: Array, word: String) -> bool:
+	if chain_nodes.size() != word.length():
+		return false
+	for i in chain_nodes.size():
+		var n: WMLetter = chain_nodes[i]
+		var ch := word.substr(i, 1).to_upper()
+		match n.tile_kind:
+			WMLetter.TileKind.WILD:
+				continue
+			WMLetter.TileKind.POISON:
+				if "AEIOU".find(ch) == -1:
+					return false
+			_:
+				if n.letter != ch:
+					return false
+	return true
+
+func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Array = [], chain_nodes: Array = []) -> void:
 	var word := word_upper.to_lower()
 	if _found.has(word):
 		_already_found_feedback(word_upper)
@@ -702,16 +1052,167 @@ func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Arra
 		return
 	_found[word] = true
 	_found_order.append(word.to_upper())
-	# Base = length × 10. Mode multiplier applied inside GameState.add_xp().
-	var base := word.length() * 10
-	var earned := GameState.add_xp("word_match", base)
+	var combo_level := _advance_combo()
+	var raw_earned := _score_word(word, chain_nodes, combo_level)
+	var earned := _award_xp(raw_earned)
 	_score += earned
+	_update_goal_progress(word, earned, chain_nodes)
+	_apply_tile_effects(chain_nodes)
 	_refresh_hud()
 	_refresh_found()
+	_refresh_goal_ui()
 	_show_toast("+%d XP   %s" % [earned, word_upper], Palette.GREEN)
 	_success_feedback(word_upper, earned, chain_positions, chain_colors)
-	if _running and _all_words_found():
-		_new_pool()
+	if word == _target_word and not _target_found:
+		_target_found = true
+		_target_reward(word)
+	if _secret_words.has(word):
+		_secret_words.erase(word)
+		_secret_reward(word)
+	if _goal_complete():
+		_clear_wave()
+	elif _running and _all_words_found():
+		_clear_wave()
+
+func _score_word(word: String, chain_nodes: Array, combo_level: int) -> int:
+	var base := _base_score_for_len(word.length())
+	var total := float(base) * _special_multiplier(chain_nodes) * _combo_multiplier(combo_level) * _wave_multiplier()
+	if _fever_active:
+		total *= 2.0
+	if _double_xp_left > 0.0:
+		total *= 2.0
+	if word == _target_word and not _target_found:
+		total += float(_target_bonus_for_len(word.length()))
+	if _secret_words.has(word):
+		total += float(word.length() * 25)
+	return maxi(1, int(round(total)))
+
+func _award_xp(raw_amount: int) -> int:
+	var base_for_state := int(round(float(raw_amount) / GameState.mode_multiplier()))
+	return GameState.add_xp("word_match", maxi(1, base_for_state))
+
+func _base_score_for_len(length: int) -> int:
+	return int(BASE_LENGTH_SCORE.get(length, length * 20))
+
+func _target_bonus_for_len(length: int) -> int:
+	return int(TARGET_REWARD.get(length, length * 80))
+
+func _special_multiplier(chain_nodes: Array) -> float:
+	var mult := 1.0
+	for n: WMLetter in chain_nodes:
+		match n.tile_kind:
+			WMLetter.TileKind.FIRE:
+				mult *= 1.5
+			WMLetter.TileKind.GOLD:
+				mult *= 2.0
+			WMLetter.TileKind.DIAMOND:
+				mult *= 3.0
+	return mult
+
+func _combo_multiplier(combo_level: int = -1) -> float:
+	var level := _combo if combo_level < 0 else combo_level
+	if level >= 5:
+		return 3.0
+	if level == 4:
+		return 2.5
+	if level == 3:
+		return 2.0
+	if level == 2:
+		return 1.5
+	return 1.0
+
+func _wave_multiplier() -> float:
+	if _wave >= 16:
+		return 2.5
+	if _wave >= 11:
+		return 2.0
+	if _wave >= 7:
+		return 1.5
+	if _wave >= 4:
+		return 1.2
+	return 1.0
+
+func _combo_window() -> float:
+	return COMBO_WINDOW_INTERMEDIATE if GameState.mode == GameState.Mode.INTERMEDIATE else COMBO_WINDOW_ADVANCED
+
+func _advance_combo() -> int:
+	_combo += 1
+	_combo_time_left = _combo_window()
+	_best_combo_this_wave = maxi(_best_combo_this_wave, _combo)
+	if _combo == 3:
+		_add_powerup("Shuffle")
+		_mascot_react("Combo x3")
+	elif _combo == 4:
+		_add_powerup("Wild")
+		Fx.banner(self, "WILD EARNED", Color("#ff7ad1"), Color.WHITE)
+	elif _combo == 5:
+		_start_fever()
+	return _combo
+
+func _break_combo(natural: bool) -> void:
+	if _combo >= 4 and natural:
+		var bonus := _award_xp(_combo * 15)
+		_score += bonus
+		_show_toast("Combo bonus +%d" % bonus, VIBRANT_GOLD)
+	_combo = 0
+	_combo_time_left = 0.0
+	_fever_active = false
+	_refresh_hud()
+	_refresh_goal_ui()
+
+func _start_fever() -> void:
+	_fever_active = true
+	_fever_pause_left = 4.0
+	Fx.banner(self, "FEVER MODE", Color("#ffd027"), VIBRANT_MAGENTA_DARK)
+	Fx.board_rim_flash(self, board_bg, Color("#ffd027"), 4)
+	Audio.play("wm_success_max", 0.02, 1.08, -0.5)
+	_mascot_react("Fever!")
+
+func _apply_tile_effects(chain_nodes: Array) -> void:
+	for n: WMLetter in chain_nodes:
+		if n.tile_kind != WMLetter.TileKind.REGULAR:
+			_used_special_this_wave = true
+		match n.tile_kind:
+			WMLetter.TileKind.FIRE:
+				if n == _fire_tile:
+					_fire_tile = null
+					_fire_time_left = 0.0
+				n.tile_kind = WMLetter.TileKind.REGULAR
+			WMLetter.TileKind.POISON:
+				if n == _poison_tile:
+					_poison_tile = null
+					_poison_time_left = 0.0
+				n.tile_kind = WMLetter.TileKind.REGULAR
+				if _lives < _max_lives:
+					_lives += 1
+					Fx.banner(self, "LIFE RESTORED", READY_GREEN, Color.WHITE)
+			WMLetter.TileKind.WILD:
+				n.tile_kind = WMLetter.TileKind.REGULAR
+
+func _chain_uses_special(chain_nodes: Array) -> bool:
+	for n: WMLetter in chain_nodes:
+		if n.tile_kind != WMLetter.TileKind.REGULAR:
+			return true
+	return false
+
+func _target_reward(word: String) -> void:
+	Fx.banner(self, "TARGET WORD", Color("#a7f8ff"), VIBRANT_BLUE_DARK)
+	if word.length() >= 7:
+		if _lives < _max_lives:
+			_lives += 1
+		_add_powerup("Wild")
+	_refresh_goal_ui()
+
+func _secret_reward(word: String) -> void:
+	Fx.banner(self, "SECRET WORD", VIBRANT_GOLD, VIBRANT_MAGENTA_DARK)
+	_add_powerup("Hint")
+	_mascot_react("Secret!")
+
+func _add_powerup(name: String) -> void:
+	if _powerups.has(name):
+		return
+	_powerups.append(name)
+	_refresh_goal_ui()
 
 func _success_feedback(word_upper: String, earned: int, chain_positions: Array, chain_colors: Array) -> void:
 	var n := word_upper.length()
@@ -774,6 +1275,8 @@ func _success_feedback(word_upper: String, earned: int, chain_positions: Array, 
 		_haptic(45, 0.7)
 
 func _invalid_word_feedback() -> void:
+	_wave_invalids += 1
+	_break_combo(false)
 	_show_toast("Not a word", Palette.RED)
 	_flash_word_card(ERROR_RED)
 	Audio.play("invalid", 0.02, 1.0, -1.5)
@@ -794,6 +1297,111 @@ func _already_found_feedback(word_upper: String) -> void:
 func _short_drag_feedback() -> void:
 	Audio.play("wm_thud", 0.01, 0.75, -15.0)
 	_haptic(12, 0.12)
+
+func _update_goal_progress(word: String, earned: int, chain_nodes: Array) -> void:
+	match _goal_type:
+		"word_count":
+			_goal_progress = _found_order.size() - _wave_words_start
+		"long_words":
+			if word.length() >= 4:
+				_goal_progress += 1
+		"xp_target":
+			_goal_progress = _score - _wave_score_start
+		"speed_burst":
+			if _speed_time_left > 0.0:
+				_speed_words += 1
+				_goal_progress = _speed_words
+		"use_special":
+			if _chain_uses_special(chain_nodes) or _used_special_this_wave:
+				_goal_progress = 1
+		"no_mistakes":
+			_goal_progress = 0 if _wave_invalids > 0 else (_found_order.size() - _wave_words_start)
+	if _goal_type == "speed_burst" and _goal_progress < _goal_target:
+		_speed_time_left = maxf(0.0, _speed_time_left)
+
+func _goal_complete() -> bool:
+	if _goal_type == "no_mistakes" and _wave_invalids > 0:
+		return false
+	return _goal_progress >= _goal_target
+
+func _clear_wave() -> void:
+	if not _running or _wave_transitioning:
+		return
+	_wave_transitioning = true
+	var bonus := 0
+	if _time_left > 30.0:
+		bonus += 60
+		_carry_time = 10.0
+	elif _time_left > 20.0:
+		bonus += 30
+		_carry_time = 5.0
+	if _wave_invalids == 0 and _wave_lives_lost == 0:
+		bonus += 50
+		_add_powerup("Wild")
+		_add_powerup("Freeze")
+	if _fever_active:
+		bonus += 80
+	if bonus > 0:
+		var earned := _award_xp(bonus)
+		_score += earned
+		_show_toast("Wave bonus +%d" % earned, VIBRANT_GOLD)
+	var stars := 1
+	if _wave_lives_lost == 0:
+		stars = 2
+	if _wave_lives_lost == 0 and _best_combo_this_wave >= 3:
+		stars = 3
+	Fx.banner(self, "WAVE %d CLEAR  %s" % [_wave, _stars_text(stars)], VIBRANT_GOLD, VIBRANT_BLUE_DARK)
+	Audio.play("victory", 0.02, 1.0, -2.0)
+	if _wave % 5 == 0:
+		if _lives < _max_lives:
+			_lives += 1
+		_double_xp_left = 15.0
+		Fx.banner(self, "MILESTONE BONUS", READY_GREEN, Color.WHITE)
+	_wave += 1
+	_wave_failures = 0
+	if _powerups.has("Freeze"):
+		_freeze_left = 8.0
+		_powerups.erase("Freeze")
+	await get_tree().create_timer(0.55).timeout
+	if _running:
+		_start_wave()
+
+func _stars_text(stars: int) -> String:
+	if stars >= 3:
+		return "***"
+	if stars == 2:
+		return "**"
+	return "*"
+
+func _fail_wave(reason: String) -> void:
+	if not _running or _wave_transitioning:
+		return
+	_wave_transitioning = true
+	_wave_failures += 1
+	_break_combo(false)
+	Fx.banner(self, "%s  %d/3" % [reason, _wave_failures], ERROR_RED, Color.WHITE)
+	Audio.play("invalid", 0.02, 0.9, -1.0)
+	if _wave_failures >= 3:
+		_wave_failures = 0
+		_lose_life("Wave failed")
+		if not _running:
+			return
+	await get_tree().create_timer(0.55).timeout
+	if _running:
+		_start_wave()
+
+func _lose_life(reason: String) -> void:
+	if not _running:
+		return
+	_lives = maxi(0, _lives - 1)
+	_wave_lives_lost += 1
+	_break_combo(false)
+	Fx.banner(self, reason.to_upper(), ERROR_RED, Color.WHITE)
+	_show_toast("%s -1 life" % reason, Palette.RED)
+	_haptic_error()
+	_refresh_hud()
+	if _lives <= 0:
+		_end_round("Game Over")
 
 func _all_words_found() -> bool:
 	for w: String in _possible_words:
@@ -848,8 +1456,14 @@ func _update_xp_preview() -> void:
 	if xp_preview_label == null:
 		return
 	var w := _current_word()
-	if w.length() >= MIN_WORD_LEN and _is_dragging:
-		var preview := int(round(float(w.length() * 10) * GameState.mode_multiplier()))
+	if _chain.size() >= MIN_WORD_LEN and _is_dragging:
+		var preview_word := _resolve_chain_word(_chain)
+		var shown_len := _chain.size() if preview_word.is_empty() else preview_word.length()
+		var preview_key := preview_word.to_lower()
+		if preview_key.is_empty():
+			for i in shown_len:
+				preview_key += "x"
+		var preview := _score_word(preview_key, _chain, maxi(1, _combo + 1))
 		xp_preview_label.text = "+%d XP" % preview
 		xp_preview_label.modulate.a = 1.0
 	else:
@@ -930,9 +1544,9 @@ func _haptic_error() -> void:
 	await get_tree().create_timer(0.07).timeout
 	_haptic(24, 0.55)
 
-func _end_round() -> void:
+func _end_round(reason: String = "Game Over") -> void:
 	_running = false
-	preview_label.text = "Time! %d XP, %d words" % [_score, _found.size()]
+	preview_label.text = "%s! %d XP, W%d" % [reason, _score, _wave]
 	Audio.play("victory" if _score > 0 else "defeat", 0.02, 1.0, -1.5)
 	if _score > 0:
 		_haptic(80, 0.55)
@@ -959,7 +1573,11 @@ func _end_round() -> void:
 		"possible_count": _possible_words.size(),
 		"missed_top": missed_top,
 		"score": _score,
-		"time_used": ROUND_TIME_SEC,
+		"time_used": 0.0,
+		"wave": _wave,
+		"lives": _lives,
+		"best_combo": _best_combo_this_wave,
+		"reason": reason,
 	}
 	# Brief pause so the player sees the "Time!" message before transitioning.
 	await get_tree().create_timer(0.8).timeout

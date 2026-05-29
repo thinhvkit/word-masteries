@@ -2,9 +2,11 @@ extends Control
 
 const Fx := preload("res://games/word_fight/fx.gd")
 
+const DRAG_THRESHOLD := 14.0
+
 const GAMES := [
 	{"id":"word_fight","name":"Word Fight","desc":"Turn-based battle on a 4×4 board","tag":"Battle","scene":"res://games/word_fight/world_map.tscn"},
-	{"id":"word_match","name":"Word Match","desc":"Drag across circle letters — 2 minutes","tag":"Drag","scene":"res://games/word_match/word_match.tscn"},
+	{"id":"word_match","name":"Word Match","desc":"Clear wave goals with combos","tag":"Drag","scene":"res://games/word_match/word_match.tscn"},
 	{"id":"word_found","name":"Word Found","desc":"Tap letters into rows, wave by wave","tag":"Waves","scene":"res://games/word_found/word_found.tscn"},
 	{"id":"story_tell","name":"Story Tell","desc":"Fill blanks — AI scores your grammar","tag":"AI","scene":"res://games/story_tell/story_tell.tscn"},
 	{"id":"word_type","name":"Word Type","desc":"Find every form of the given word","tag":"Grammar","scene":"res://games/word_type/word_type.tscn"},
@@ -27,6 +29,7 @@ const ACCENT_ROSE := Color("#D4728A")
 const COZY_BROWN := Color("#8B6B50")
 
 @onready var list: VBoxContainer = $V/Scroll/List
+@onready var _scroll: ScrollContainer = $V/Scroll
 @onready var greet: Label = $V/Header/Greet
 @onready var xp_pill: PanelContainer = $V/Header/XP
 @onready var xp_label: Label = $V/Header/XP/Label
@@ -73,8 +76,9 @@ func _ready() -> void:
 	_insert_mode_row()
 
 	GameState.score_added.connect(func(_g, _a): _refresh_xp())
-	for i in GAMES.size():
-		var card := _build_row(GAMES[i])
+	var visible_games := GAMES.filter(func(g): return g.id in ["word_fight", "word_match", "word_found"])
+	for i in visible_games.size():
+		var card := _build_row(visible_games[i])
 		list.add_child(card)
 		card.modulate.a = 0.0
 		card.scale = Vector2(0.92, 0.92)
@@ -84,6 +88,11 @@ func _ready() -> void:
 		tw.set_parallel(true)
 		tw.tween_property(card, "modulate:a", 1.0, 0.25)
 		tw.tween_property(card, "scale", Vector2(1, 1), 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenDrag:
+		_scroll.scroll_vertical -= int(event.relative.y)
+		get_viewport().set_input_as_handled()
 
 func _insert_mode_row() -> void:
 	var row := HBoxContainer.new()
@@ -251,11 +260,7 @@ func _build_row(g: Dictionary) -> Control:
 	btn.custom_minimum_size = Vector2(0, 92)
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.toggle_mode = false
-	btn.pressed.connect(func():
-		if g.id == "word_fight":
-			GameState.wf_session["enemy_idx"] = 0
-		_open(g.scene)
-	)
+	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	btn.text = ""
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = CARD_BG
@@ -315,6 +320,25 @@ func _build_row(g: Dictionary) -> Control:
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(tag)
 
+	var touch_start := Vector2.ZERO
+	var touch_active := false
+	btn.gui_input.connect(func(event: InputEvent):
+		if event is InputEventScreenTouch:
+			if event.pressed:
+				touch_start = event.position
+				touch_active = true
+			else:
+				if touch_active and touch_start.distance_to(event.position) < DRAG_THRESHOLD:
+					if g.id == "word_fight":
+						GameState.wf_session["enemy_idx"] = 0
+					_open(g.scene)
+				touch_active = false
+		elif event is InputEventMouseButton:
+			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				if g.id == "word_fight":
+					GameState.wf_session["enemy_idx"] = 0
+				_open(g.scene))
+
 	return btn
 
 func _icon_block(game_id: String, color: Color) -> Control:
@@ -329,6 +353,7 @@ func _icon_block(game_id: String, color: Color) -> Control:
 	shadow_sb.bg_color = color.darkened(0.15)
 	shadow_sb.set_corner_radius_all(16)
 	bg.add_theme_stylebox_override("panel", shadow_sb)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(bg)
 	var top := PanelContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -340,6 +365,7 @@ func _icon_block(game_id: String, color: Color) -> Control:
 	sb.set_border_width_all(2)
 	sb.border_color = Color(1, 1, 1, 0.3)
 	top.add_theme_stylebox_override("panel", sb)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(top)
 	var tex_path := "res://assets/games/%s.svg" % game_id
 	if ResourceLoader.exists(tex_path):
@@ -354,6 +380,7 @@ func _icon_block(game_id: String, color: Color) -> Control:
 
 func _tag_pill(text: String, accent: Color) -> Control:
 	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(accent.r, accent.g, accent.b, 0.12)
 	sb.set_corner_radius_all(99)

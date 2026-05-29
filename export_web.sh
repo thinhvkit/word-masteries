@@ -62,6 +62,9 @@ if "<!-- Safari / iOS PWA polish -->" not in html:
 PY
 fi
 
+# Use the project SVG as the browser favicon for the web build.
+cp "$PROJECT_DIR/icon.svg" "$OUT_DIR/icon.svg"
+
 # Drop a _headers file (Netlify / Cloudflare Pages format) enabling
 # SharedArrayBuffer so the worker-thread enemy AI runs threaded.
 cat > "$OUT_DIR/_headers" <<'EOF'

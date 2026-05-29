@@ -37,20 +37,31 @@ func _build_ui(s: Dictionary) -> void:
 	body.add_theme_constant_override("separation", 14)
 	scroll.add_child(body)
 
-	body.add_child(UI.center_label("Time's Up!", 32, Palette.TEXT))
-	body.add_child(UI.center_label("Great job finding words", 16, Palette.TEXT_SECONDARY))
+	body.add_child(UI.center_label(str(s.get("reason", "Game Over")), 32, Palette.TEXT))
+	body.add_child(UI.center_label("Wave %d reached" % int(s.get("wave", 1)), 16, Palette.TEXT_SECONDARY))
 
 	# Stat boxes
 	var found_words: Array = s.get("found_words", [])
 	var possible: int = int(s.get("possible_count", 0))
 	var score: int = int(s.get("score", 0))
+	var wave: int = int(s.get("wave", 1))
+	var lives: int = int(s.get("lives", 0))
+	var best_combo: int = int(s.get("best_combo", 0))
 
 	var stats := HBoxContainer.new()
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	stats.add_theme_constant_override("separation", 32)
+	stats.add_child(UI.stat_box("Wave", str(wave), Palette.BLUE_DARK))
 	stats.add_child(UI.stat_box("Words Found", str(found_words.size()), Palette.SAGE_DARK))
 	stats.add_child(UI.stat_box("Total Score", str(score), Palette.PINK_DARK))
 	body.add_child(stats)
+
+	var run_stats := HBoxContainer.new()
+	run_stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	run_stats.add_theme_constant_override("separation", 32)
+	run_stats.add_child(UI.stat_box("Lives Left", str(lives), Palette.TERRACOTTA))
+	run_stats.add_child(UI.stat_box("Best Combo", "x%d" % maxi(1, best_combo), Palette.GOLD_DARK))
+	body.add_child(run_stats)
 
 	# Pool (small hint of the round)
 	var pool := str(s.get("pool", ""))

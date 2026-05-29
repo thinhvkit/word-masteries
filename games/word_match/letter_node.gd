@@ -10,6 +10,7 @@ const LETTER_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 signal letter_selected_fx(letter: WMLetter, color: Color)
 
 const SIZE := 87.0
+enum TileKind { REGULAR, FIRE, GOLD, DIAMOND, POISON, WILD }
 
 const _CANDY_TIERS := [
 	# Vowels — cherry red
@@ -26,6 +27,14 @@ const _CANDY_SELECT := {
 	"top": Color("#FFD740"), "bot": Color("#FFB300"), "outline": Color("#FFE57F"), "ink": Color.WHITE,
 }
 
+const _SPECIAL_CANDY := {
+	TileKind.FIRE: {"top": Color("#ff9a3d"), "bot": Color("#d84a14"), "outline": Color("#ffd06a"), "ink": Color.WHITE, "mark": "F"},
+	TileKind.GOLD: {"top": Color("#ffe66d"), "bot": Color("#d19a08"), "outline": Color("#fff4a8"), "ink": Color("#513800"), "mark": "G"},
+	TileKind.DIAMOND: {"top": Color("#a7f8ff"), "bot": Color("#20b8d8"), "outline": Color("#e0ffff"), "ink": Color("#06375e"), "mark": "D"},
+	TileKind.POISON: {"top": Color("#5cb85c"), "bot": Color("#1f5f2a"), "outline": Color("#a8f49e"), "ink": Color.WHITE, "mark": "P"},
+	TileKind.WILD: {"top": Color("#ff7ad1"), "bot": Color("#3aa8ff"), "outline": Color("#ffd027"), "ink": Color.WHITE, "mark": "W"},
+}
+
 @export var letter: String = "A" :
 	set(v):
 		letter = v.to_upper()
@@ -40,6 +49,11 @@ var selected: bool = false :
 		if selected:
 			var candy := _candy_for_letter()
 			letter_selected_fx.emit(self, candy.outline)
+
+var tile_kind: int = TileKind.REGULAR :
+	set(v):
+		tile_kind = v
+		queue_redraw()
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
@@ -68,6 +82,8 @@ func _animate_select() -> void:
 	tw.tween_property(self, "scale", target_scale, 0.16)
 
 func _candy_for_letter() -> Dictionary:
+	if tile_kind != TileKind.REGULAR and _SPECIAL_CANDY.has(tile_kind):
+		return _SPECIAL_CANDY[tile_kind]
 	var tier := Fx.tier_for_letter(letter)
 	return _CANDY_TIERS[clampi(tier, 0, _CANDY_TIERS.size() - 1)]
 
@@ -112,6 +128,8 @@ func _draw() -> void:
 	# Bottom edge shadow for 3D depth.
 	draw_arc(center, r - 1, 0.15, PI - 0.15, 32, Color(0, 0, 0, 0.18), 3.0, true)
 
+	if tile_kind != TileKind.REGULAR:
+		_draw_special_mark(center, r, candy)
 	_draw_letter(center, ink)
 
 func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) -> void:
@@ -129,9 +147,23 @@ func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) ->
 func _draw_letter(center: Vector2, col: Color) -> void:
 	var f: Font = LETTER_FONT
 	var fs := 42
-	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
+	var shown := "*" if tile_kind == TileKind.WILD else ("?" if tile_kind == TileKind.POISON else letter)
+	var ts := f.get_string_size(shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
-	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
+	draw_string(f, base + Vector2(1, 2), shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
+	draw_string(f, base, shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
+
+func _draw_special_mark(center: Vector2, r: float, candy: Dictionary) -> void:
+	var mark := str(candy.get("mark", ""))
+	if mark.is_empty():
+		return
+	var badge_pos := center + Vector2(r * 0.42, -r * 0.42)
+	draw_circle(badge_pos, 12, Color(0, 0, 0, 0.28))
+	draw_circle(badge_pos, 10, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.95))
+	var f: Font = LETTER_FONT
+	var fs := 13
+	var ts := f.get_string_size(mark, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
+	var base := Vector2(badge_pos.x - ts.x * 0.5, badge_pos.y + (f.get_ascent(fs) - f.get_descent(fs)) * 0.5)
+	draw_string(f, base, mark, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0.12, 0.08, 0.16))
