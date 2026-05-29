@@ -161,25 +161,23 @@ func _build_ui() -> void:
 	var top := VBoxContainer.new()
 	top.anchor_right = 1.0
 	top.offset_left = 16
-	top.offset_top = Chrome.HEADER_H + 12
+	top.offset_top = Chrome.HEADER_H + 8
 	top.offset_right = -16
-	top.offset_bottom = 390
-	top.add_theme_constant_override("separation", 12)
+	top.offset_bottom = 350
+	top.add_theme_constant_override("separation", 8)
 	add_child(top)
 
 	# Timer + XP chips row.
-	var hud := HBoxContainer.new()
-	hud.add_theme_constant_override("separation", 8)
+	var hud := HFlowContainer.new()
+	hud.add_theme_constant_override("h_separation", 6)
+	hud.add_theme_constant_override("v_separation", 6)
 	wave_label = _hud_chip("W1", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK, "res://assets/icons/wave.svg")
 	hud.add_child(wave_label.get_parent().get_parent())
 	timer_label = _hud_chip("2:00", VIBRANT_BLUE, Color.WHITE, VIBRANT_BLUE_DARK, "res://assets/icons/clock.svg")
 	timer_chip = timer_label.get_parent().get_parent() as Control
 	hud.add_child(timer_chip)
-	lives_label = _hud_chip("3 lives", ERROR_RED, Color.WHITE, Color("#a21d2d"), "res://assets/icons/heart_broken.svg")
+	lives_label = _hud_chip("3", ERROR_RED, Color.WHITE, Color("#a21d2d"), "res://assets/icons/heart_broken.svg")
 	hud.add_child(lives_label.get_parent().get_parent())
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hud.add_child(spacer)
 	score_label = _hud_chip("0 XP", VIBRANT_GOLD, VIBRANT_GOLD_DARK, Color("#dba830"), "res://assets/icons/star.svg")
 	hud.add_child(score_label.get_parent().get_parent())
 	top.add_child(hud)
@@ -188,54 +186,49 @@ func _build_ui() -> void:
 	var found_card := PanelContainer.new()
 	var found_sb := StyleBoxFlat.new()
 	found_sb.bg_color = DARK_CARD
-	found_sb.set_corner_radius_all(18)
+	found_sb.set_corner_radius_all(14)
 	found_sb.set_border_width_all(2)
 	found_sb.border_color = DARK_CARD_BORDER
 	found_sb.shadow_color = Color(0, 0, 0, 0.25)
-	found_sb.shadow_size = 6
-	found_sb.shadow_offset = Vector2i(0, 3)
-	found_sb.content_margin_left = 16
-	found_sb.content_margin_right = 16
-	found_sb.content_margin_top = 12
-	found_sb.content_margin_bottom = 12
+	found_sb.shadow_size = 4
+	found_sb.shadow_offset = Vector2i(0, 2)
+	found_sb.content_margin_left = 12
+	found_sb.content_margin_right = 12
+	found_sb.content_margin_top = 8
+	found_sb.content_margin_bottom = 8
 	found_card.add_theme_stylebox_override("panel", found_sb)
 	var found_box := VBoxContainer.new()
-	found_box.add_theme_constant_override("separation", 4)
+	found_box.add_theme_constant_override("separation", 2)
 	found_label = Label.new()
 	found_label.text = "Found: 0"
 	found_label.add_theme_color_override("font_color", Color("#ffd027"))
-	found_label.add_theme_font_size_override("font_size", 16)
+	found_label.add_theme_font_size_override("font_size", 14)
 	found_box.add_child(found_label)
 	combo_label = Label.new()
 	combo_label.text = "Combo: x1"
 	combo_label.add_theme_color_override("font_color", Color("#ffb347"))
-	combo_label.add_theme_font_size_override("font_size", 15)
+	combo_label.add_theme_font_size_override("font_size", 14)
 	found_box.add_child(combo_label)
 	goal_label = Label.new()
 	goal_label.text = "Goal"
 	goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	goal_label.add_theme_color_override("font_color", Color.WHITE)
-	goal_label.add_theme_font_size_override("font_size", 16)
+	goal_label.add_theme_font_size_override("font_size", 14)
 	found_box.add_child(goal_label)
 	target_label = Label.new()
 	target_label.text = "Target: _ _ _"
 	target_label.add_theme_color_override("font_color", Color("#a7f8ff"))
-	target_label.add_theme_font_size_override("font_size", 15)
+	target_label.add_theme_font_size_override("font_size", 13)
 	found_box.add_child(target_label)
 	powers_label = Label.new()
 	powers_label.text = "Power-ups: -"
 	powers_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	powers_label.add_theme_color_override("font_color", Color("#d8ffd8"))
-	powers_label.add_theme_font_size_override("font_size", 14)
+	powers_label.add_theme_font_size_override("font_size", 12)
 	found_box.add_child(powers_label)
-	var hint := Label.new()
-	hint.text = "Chain words, clear the wave goal, protect your lives."
-	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
-	hint.add_theme_font_size_override("font_size", 17)
-	found_box.add_child(hint)
 	found_pills_row = HFlowContainer.new()
-	found_pills_row.add_theme_constant_override("h_separation", 6)
-	found_pills_row.add_theme_constant_override("v_separation", 6)
+	found_pills_row.add_theme_constant_override("h_separation", 4)
+	found_pills_row.add_theme_constant_override("v_separation", 4)
 	found_box.add_child(found_pills_row)
 	found_card.add_child(found_box)
 	top.add_child(found_card)
@@ -248,10 +241,10 @@ func _build_ui() -> void:
 	word_sb.set_border_width_all(3)
 	word_sb.border_color = VIBRANT_MAGENTA_DARK
 	word_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.45)
-	word_sb.shadow_size = 10
-	word_sb.shadow_offset = Vector2i(0, 3)
-	word_sb.content_margin_top = 14
-	word_sb.content_margin_bottom = 14
+	word_sb.shadow_size = 6
+	word_sb.shadow_offset = Vector2i(0, 2)
+	word_sb.content_margin_top = 8
+	word_sb.content_margin_bottom = 8
 	_word_card_style = word_sb
 	word_card.add_theme_stylebox_override("panel", word_sb)
 	var word_stack := VBoxContainer.new()
@@ -263,7 +256,7 @@ func _build_ui() -> void:
 	preview_label.add_theme_color_override("font_color", Color.WHITE)
 	preview_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
 	preview_label.add_theme_constant_override("outline_size", 4)
-	preview_label.add_theme_font_size_override("font_size", 28)
+	preview_label.add_theme_font_size_override("font_size", 24)
 	word_stack.add_child(preview_label)
 	xp_preview_label = Label.new()
 	xp_preview_label.text = ""
@@ -279,7 +272,7 @@ func _build_ui() -> void:
 	# stack and the footer hint — the previously-fixed 444×444 box left big
 	# empty bands on tall screens. The ring's radius is derived from the
 	# holder size, so a larger holder = larger ring automatically.
-	const BOARD_AREA_TOP := 410   # below the HUD + found card + current-word pill
+	const BOARD_AREA_TOP := 288   # below the compact HUD + found card + current-word pill
 	const BOARD_AREA_BOTTOM := -48  # above the footer hint
 	const BOARD_AREA_INSET := 8
 	board_bg = Fx.BoardBG.new()
@@ -421,16 +414,39 @@ func _build_mascot() -> void:
 	mascot_speech_label.add_theme_color_override("font_color", DARK_CARD)
 	bubble.add_child(mascot_speech_label)
 
+	var avatar_chip := Control.new()
+	avatar_chip.position = Vector2(52, 10)
+	avatar_chip.size = Vector2(48, 48)
+	avatar_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mascot.add_child(avatar_chip)
+
+	var avatar_bg := Panel.new()
+	avatar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var avatar_sb := StyleBoxFlat.new()
+	avatar_sb.bg_color = GOLD_LIGHT
+	avatar_sb.set_corner_radius_all(24)
+	avatar_sb.set_border_width_all(2)
+	avatar_sb.border_color = VIBRANT_GOLD
+	avatar_sb.shadow_color = Color(VIBRANT_GOLD.r, VIBRANT_GOLD.g, VIBRANT_GOLD.b, 0.2)
+	avatar_sb.shadow_size = 4
+	avatar_sb.shadow_offset = Vector2i(0, 2)
+	avatar_bg.add_theme_stylebox_override("panel", avatar_sb)
+	avatar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	avatar_chip.add_child(avatar_bg)
+
 	mascot_icon = TextureRect.new()
 	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
 	if ResourceLoader.exists(path):
 		mascot_icon.texture = load(path)
-	mascot_icon.position = Vector2(52, 10)
-	mascot_icon.size = Vector2(48, 48)
+	mascot_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mascot_icon.offset_left = 4
+	mascot_icon.offset_top = 4
+	mascot_icon.offset_right = -4
+	mascot_icon.offset_bottom = -4
 	mascot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	mascot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	mascot_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mascot.add_child(mascot_icon)
+	avatar_chip.add_child(mascot_icon)
 
 func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0, 0), icon_path: String = "") -> Label:
 	# Returns the inner Label so the caller can update text. The parent is an
@@ -440,10 +456,10 @@ func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.set_corner_radius_all(99)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 7
-	sb.content_margin_bottom = 7
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
 	sb.shadow_color = Color(0, 0, 0, 0.22)
 	sb.shadow_size = 4
 	sb.shadow_offset = Vector2i(0, 2)
@@ -451,6 +467,7 @@ func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0
 		sb.set_border_width_all(2)
 		sb.border_color = border
 	p.add_theme_stylebox_override("panel", sb)
+	p.custom_minimum_size = Vector2(78, 0)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -460,14 +477,14 @@ func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0
 		icon.texture = load(icon_path)
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.custom_minimum_size = Vector2(18, 18)
+		icon.custom_minimum_size = Vector2(16, 16)
 		icon.modulate = fg
 		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(icon)
 	var lbl := Label.new()
 	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", 17)
+	lbl.add_theme_font_size_override("font_size", 15)
 	lbl.add_theme_color_override("font_color", fg)
 	row.add_child(lbl)
 	return lbl
@@ -784,7 +801,7 @@ func _refresh_hud() -> void:
 	if wave_label != null:
 		wave_label.text = "W%d" % _wave
 	if lives_label != null:
-		lives_label.text = "%d lives" % _lives
+		lives_label.text = "%d" % _lives
 	if combo_label != null:
 		var suffix := " FEVER" if _fever_active else ""
 		combo_label.text = "Combo: x%d%s" % [maxi(1, _combo), suffix]
@@ -809,7 +826,9 @@ func _refresh_found() -> void:
 		c.queue_free()
 	if _found.is_empty():
 		return
-	for w: String in _found_order:
+	var start_idx := maxi(0, _found_order.size() - 4)
+	for i in range(start_idx, _found_order.size()):
+		var w: String = _found_order[i]
 		var shown := ("FIRE " if _fever_words.has(w.to_lower()) else "") + w
 		found_pills_row.add_child(UI.pill(shown, Color("#ffd027"), Color("#3a2a78")))
 
