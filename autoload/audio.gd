@@ -146,6 +146,37 @@ func _build_bank() -> void:
 	# Invalid word — buzzy low square.
 	_bank["invalid"] = _wav(_voice(190.0, 130.0, 0.30, WAVE_SQUARE, 0.004, 0.16, 0.26))
 
+	# Word Match micro feedback.
+	_bank["wm_pop"] = _wav(_voice(500.0, 560.0, 0.05, WAVE_SINE, 0.002, 0.025, 0.24))
+	_bank["wm_thud"] = _wav(_voice(300.0, 200.0, 0.04, WAVE_SINE, 0.001, 0.025, 0.16))
+	_bank["wm_ready"] = _wav(_voice(523.25, 523.25, 0.08, WAVE_SINE, 0.004, 0.05, 0.26))
+
+	# Word Match success tiers.
+	var wm_low := PackedFloat32Array()
+	var wm_low_notes := [523.25, 659.25, 783.99]
+	for k in wm_low_notes.size():
+		_mix(wm_low, _voice(wm_low_notes[k], wm_low_notes[k], 0.12, WAVE_SINE, 0.003, 0.06, 0.24), int(k * 0.055 * SR))
+	_bank["wm_success_low"] = _wav(wm_low)
+
+	var wm_mid := PackedFloat32Array()
+	var wm_mid_notes := [523.25, 659.25, 783.99, 1046.50]
+	for k in wm_mid_notes.size():
+		_mix(wm_mid, _voice(wm_mid_notes[k], wm_mid_notes[k], 0.13, WAVE_TRI, 0.003, 0.07, 0.25), int(k * 0.05 * SR))
+	_mix(wm_mid, _voice(1600.0, 2600.0, 0.22, WAVE_SINE, 0.01, 0.11, 0.08), int(0.05 * SR))
+	_bank["wm_success_mid"] = _wav(wm_mid)
+
+	var wm_max := PackedFloat32Array()
+	var wm_max_notes := [392.00, 523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98]
+	for k in wm_max_notes.size():
+		var dur := 0.20 if k == wm_max_notes.size() - 1 else 0.11
+		_mix(wm_max, _voice(wm_max_notes[k], wm_max_notes[k], dur, WAVE_TRI, 0.003, dur * 0.5, 0.26), int(k * 0.045 * SR))
+	_mix(wm_max, _voice(1800.0, 4200.0, 0.34, WAVE_SINE, 0.012, 0.18, 0.10), int(0.08 * SR))
+	_bank["wm_success_max"] = _wav(wm_max)
+
+	_bank["wm_known"] = _wav(_voice(240.0, 190.0, 0.16, WAVE_SQUARE, 0.004, 0.10, 0.14))
+	_bank["wm_tick"] = _wav(_voice(520.0, 520.0, 0.055, WAVE_TRI, 0.001, 0.025, 0.14))
+	_bank["wm_tick_fast"] = _wav(_voice(800.0, 800.0, 0.065, WAVE_TRI, 0.001, 0.03, 0.22))
+
 	# Player hit — noise crack over a low thump.
 	var hit := _lowpass(_voice(1.0, 1.0, 0.10, WAVE_NOISE, 0.001, 0.05, 0.5), 0.42)
 	_mix(hit, _voice(220.0, 90.0, 0.16, WAVE_SINE, 0.002, 0.09, 0.5))

@@ -244,6 +244,123 @@ class _ConfettiChip extends Control:
 	func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), col)
 
+# ---- Word Match tier bursts / stamps --------------------------------------
+static func word_burst(parent: Control, center: Vector2, count: int, colors: Array,
+		radius: float = 90.0, include_stars: bool = false, include_confetti: bool = false) -> void:
+	if parent == null:
+		return
+	if colors.is_empty():
+		colors = [Color.WHITE]
+	for i in count:
+		var col: Color = colors[i % colors.size()]
+		var p := _WordBurstParticle.new(col, include_stars and i % 4 == 0, include_confetti and i % 3 == 0)
+		p.position = center
+		p.z_index = 180
+		parent.add_child(p)
+		var ang := randf() * TAU
+		var dist := randf_range(radius * 0.35, radius)
+		var target := center + Vector2(cos(ang), sin(ang)) * dist
+		var dur := randf_range(0.36, 0.52)
+		var tw := parent.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(p, "position", target, dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(p, "scale", Vector2(0.25, 0.25), dur)
+		tw.tween_property(p, "rotation", randf_range(-PI, PI), dur)
+		tw.tween_property(p, "modulate:a", 0.0, dur).set_delay(dur * 0.35)
+		tw.chain().tween_callback(p.queue_free)
+
+static func board_rim_flash(parent: Control, target: Control, color: Color, pulses: int = 3) -> void:
+	if parent == null or target == null:
+		return
+	var rim := _RimFlash.new(color, pulses)
+	rim.position = target.global_position - parent.global_position
+	rim.size = target.size
+	rim.z_index = 170
+	parent.add_child(rim)
+	var tw := parent.create_tween()
+	var advance := func(v: float) -> void:
+		if is_instance_valid(rim):
+			rim.progress = v
+			rim.queue_redraw()
+	tw.tween_method(advance, 0.0, 1.0, 0.48)
+	tw.tween_callback(rim.queue_free)
+
+static func stamp(parent: Control, center: Vector2, text: String = "X", color: Color = Color("#ff3838")) -> void:
+	if parent == null:
+		return
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 34)
+	lbl.add_theme_color_override("font_color", color)
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+	lbl.add_theme_constant_override("outline_size", 5)
+	lbl.position = center - Vector2(18, 24)
+	lbl.rotation = -0.18
+	lbl.scale = Vector2(0.3, 0.3)
+	lbl.modulate.a = 0.0
+	lbl.z_index = 220
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(lbl)
+	var tw := parent.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "modulate:a", 1.0, 0.08)
+	tw.tween_property(lbl, "scale", Vector2(1.15, 1.15), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(0.28)
+	tw.chain().tween_property(lbl, "modulate:a", 0.0, 0.18)
+	tw.chain().tween_callback(lbl.queue_free)
+
+class _WordBurstParticle extends Control:
+	var col: Color
+	var star := false
+	var confetti := false
+	func _init(c: Color, is_star: bool, is_confetti: bool) -> void:
+		col = c
+		star = is_star
+		confetti = is_confetti
+		size = Vector2(10, 10)
+		pivot_offset = size * 0.5
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		if confetti:
+			draw_rect(Rect2(Vector2(1, 3), Vector2(8, 4)), col)
+		elif star:
+			draw_line(Vector2(5, 0), Vector2(5, 10), col, 2.2, true)
+			draw_line(Vector2(0, 5), Vector2(10, 5), col, 2.2, true)
+			draw_line(Vector2(2, 2), Vector2(8, 8), Color.WHITE, 1.2, true)
+			draw_line(Vector2(8, 2), Vector2(2, 8), Color.WHITE, 1.2, true)
+		else:
+			draw_circle(Vector2(5, 5), 4.0, col)
+			draw_circle(Vector2(5, 5), 1.8, Color.WHITE)
+
+class _RimFlash extends Control:
+	var col: Color
+	var pulses: int
+	var progress := 0.0
+	func _init(c: Color, p: int) -> void:
+		col = c
+		pulses = maxi(1, p)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var phase := sin(progress * float(pulses) * PI)
+		var a := clampf(phase, 0.0, 1.0) * (1.0 - progress * 0.25)
+		var r := minf(28.0, minf(size.x, size.y) * 0.5)
+		for k in 4:
+			var inset := float(k) * 4.0
+			var rect := Rect2(Vector2(inset, inset), size - Vector2(inset * 2.0, inset * 2.0))
+			_round_outline(rect, Color(col.r, col.g, col.b, a * (0.9 - k * 0.16)), r, 5.0 - k * 0.6)
+	func _round_outline(rect: Rect2, color: Color, r: float, width: float) -> void:
+		var rr: float = minf(r, minf(rect.size.x, rect.size.y) * 0.5)
+		var p := rect.position
+		var sz := rect.size
+		draw_line(p + Vector2(rr, 0), p + Vector2(sz.x - rr, 0), color, width, true)
+		draw_line(p + Vector2(rr, sz.y), p + Vector2(sz.x - rr, sz.y), color, width, true)
+		draw_line(p + Vector2(0, rr), p + Vector2(0, sz.y - rr), color, width, true)
+		draw_line(p + Vector2(sz.x, rr), p + Vector2(sz.x, sz.y - rr), color, width, true)
+		draw_arc(p + Vector2(rr, rr), rr, PI, PI * 1.5, 16, color, width, true)
+		draw_arc(p + Vector2(sz.x - rr, rr), rr, -PI * 0.5, 0, 16, color, width, true)
+		draw_arc(p + Vector2(rr, sz.y - rr), rr, PI * 0.5, PI, 16, color, width, true)
+		draw_arc(p + Vector2(sz.x - rr, sz.y - rr), rr, 0, PI * 0.5, 16, color, width, true)
+
 # ---- fireworks (rainbow earned) ------------------------------------------
 static func fireworks(parent: Control, center: Vector2) -> void:
 	var palette := [

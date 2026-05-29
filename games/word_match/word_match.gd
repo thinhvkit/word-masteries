@@ -41,6 +41,13 @@ const VIBRANT_MAGENTA := Color("#ff3aa8")
 const VIBRANT_MAGENTA_DARK := Color("#7a0e4a")
 const DARK_CARD := Color("#1a1240")
 const DARK_CARD_BORDER := Color("#3a2a78")
+const READY_GREEN := Color("#3ad66e")
+const ERROR_RED := Color("#ff4a5c")
+
+const BURST_BLUE := [Color("#7fd4ff"), Color("#3aa8ff"), Color("#dff5ff")]
+const BURST_GREEN := [Color("#5be68a"), Color("#2fc462"), Color("#d8ffd8")]
+const BURST_PURPLE := [Color("#b07aff"), Color("#ff7ad1"), Color("#f0d8ff")]
+const BURST_GOLD := [Color("#ffd027"), Color("#ff8a2a"), Color("#3aa8ff"), Color("#ff3aa8"), Color("#3ad6a8")]
 
 var letters_holder: Control
 var board_bg: Control
@@ -55,8 +62,16 @@ var line_glow: Line2D
 var back_btn: Button
 var toast: Label
 var word_card: PanelContainer
+var xp_preview_label: Label
 var shuffle_btn: Button
+var mascot: Control
+var mascot_icon: TextureRect
+var mascot_speech: PanelContainer
+var mascot_speech_label: Label
+var dim_overlay: ColorRect
 var _line_phase: float = 0.0
+var _word_card_style: StyleBoxFlat
+var _word_card_flash_id: int = 0
 
 var _letters: Array[WMLetter] = []
 var _chain: Array[WMLetter] = []   # ordered nodes selected
@@ -66,6 +81,10 @@ var _score: int = 0
 var _found: Dictionary = {}        # word -> true
 var _found_order: Array = []       # in order discovered, for results screen
 var _is_dragging: bool = false
+var _is_shuffling: bool = false
+var _submittable_announced: bool = false
+var _last_timer_second: int = -1
+var _idle_phase: float = 0.0
 var _pool: String = ""             # current round pool
 var _used_pools: Array = []        # pools already used this session
 var _possible_words: Array = []    # all formable words from pool (length-desc)
@@ -155,7 +174,10 @@ func _build_ui() -> void:
 	word_sb.shadow_offset = Vector2i(0, 3)
 	word_sb.content_margin_top = 14
 	word_sb.content_margin_bottom = 14
+	_word_card_style = word_sb
 	word_card.add_theme_stylebox_override("panel", word_sb)
+	var word_stack := VBoxContainer.new()
+	word_stack.add_theme_constant_override("separation", 2)
 	preview_label = Label.new()
 	preview_label.text = "—"
 	preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -164,7 +186,15 @@ func _build_ui() -> void:
 	preview_label.add_theme_color_override("font_outline_color", Color(0.5, 0, 0.2, 0.55))
 	preview_label.add_theme_constant_override("outline_size", 4)
 	preview_label.add_theme_font_size_override("font_size", 28)
-	word_card.add_child(preview_label)
+	word_stack.add_child(preview_label)
+	xp_preview_label = Label.new()
+	xp_preview_label.text = ""
+	xp_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	xp_preview_label.add_theme_color_override("font_color", Color("#d8ffd8"))
+	xp_preview_label.add_theme_font_size_override("font_size", 13)
+	xp_preview_label.modulate.a = 0.0
+	word_stack.add_child(xp_preview_label)
+	word_card.add_child(word_stack)
 	top.add_child(word_card)
 
 	# Animated vibrant backdrop stretches to fill the area between the top
@@ -186,6 +216,7 @@ func _build_ui() -> void:
 	board_bg.offset_bottom = BOARD_AREA_BOTTOM
 	board_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(board_bg)
+	_build_mascot(Chrome.HEADER_H + BOARD_AREA_TOP + 12)
 
 	# Letters holder shares the same rect so taps land naturally over the ring.
 	letters_holder = Control.new()
@@ -272,6 +303,58 @@ func _build_ui() -> void:
 	footer.add_theme_color_override("font_color", Chrome.TEXT_SEC)
 	add_child(footer)
 
+	dim_overlay = ColorRect.new()
+	dim_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim_overlay.color = Color(0, 0, 0, 0.0)
+	dim_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim_overlay.z_index = 260
+	add_child(dim_overlay)
+
+func _build_mascot(top_y: float) -> void:
+	mascot = Control.new()
+	mascot.anchor_left = 1.0
+	mascot.anchor_right = 1.0
+	mascot.offset_left = -104
+	mascot.offset_right = -16
+	mascot.offset_top = top_y
+	mascot.offset_bottom = top_y + 96
+	mascot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mascot.z_index = 90
+	add_child(mascot)
+
+	var bubble := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, 0.94)
+	sb.set_corner_radius_all(14)
+	sb.content_margin_left = 9
+	sb.content_margin_right = 9
+	sb.content_margin_top = 5
+	sb.content_margin_bottom = 5
+	bubble.add_theme_stylebox_override("panel", sb)
+	bubble.position = Vector2(-92, 0)
+	bubble.custom_minimum_size = Vector2(86, 30)
+	bubble.scale = Vector2(0.0, 0.0)
+	bubble.pivot_offset = Vector2(80, 28)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mascot_speech = bubble
+	mascot.add_child(bubble)
+	mascot_speech_label = Label.new()
+	mascot_speech_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mascot_speech_label.add_theme_font_size_override("font_size", 13)
+	mascot_speech_label.add_theme_color_override("font_color", DARK_CARD)
+	bubble.add_child(mascot_speech_label)
+
+	mascot_icon = TextureRect.new()
+	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
+	if ResourceLoader.exists(path):
+		mascot_icon.texture = load(path)
+	mascot_icon.position = Vector2(12, 28)
+	mascot_icon.size = Vector2(70, 70)
+	mascot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mascot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mascot_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mascot.add_child(mascot_icon)
+
 func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0, 0), icon_path: String = "") -> Label:
 	# Returns the inner Label so the caller can update text. The parent is an
 	# HBoxContainer (icon + label) wrapped in the PanelContainer; callers that
@@ -316,12 +399,18 @@ func _start_round() -> void:
 	_score = 0
 	_time_left = ROUND_TIME_SEC
 	_running = true
+	_submittable_announced = false
+	_last_timer_second = int(ceil(ROUND_TIME_SEC))
 	_found.clear()
 	_found_order.clear()
 	_spawn_wave()
 	_refresh_hud()
 	_refresh_found()
 	preview_label.text = "—"
+	_update_xp_preview()
+	_reset_word_card_style()
+	if dim_overlay != null:
+		dim_overlay.color = Color(0, 0, 0, 0.0)
 
 func _spawn_wave() -> void:
 	for c in _letters:
@@ -330,7 +419,7 @@ func _spawn_wave() -> void:
 	_chain.clear()
 	var pool := _pick_pool()
 	_pool = pool
-	_possible_words = Words.words_from_letters(pool, MIN_WORD_LEN, true)
+	_possible_words = Words.words_from_letters(pool, MIN_WORD_LEN, false)
 	_possible_words.sort_custom(func(a, b):
 		if a.length() != b.length():
 			return a.length() > b.length()
@@ -374,7 +463,7 @@ func _spawn_letters(pool: String) -> void:
 
 func _on_letter_selected_fx(node: WMLetter, color: Color) -> void:
 	var pos := node.global_position + node.size * 0.5 - global_position
-	Fx.sparkle_burst(self, pos, color, 8)
+	Fx.sparkle_burst(self, pos, color, 3)
 
 func _count_vowels(arr: Array) -> int:
 	var v := 0
@@ -401,6 +490,7 @@ func _layout_letters() -> void:
 		var pos := center + Vector2(cos(angle), sin(angle)) * radius
 		var node := _letters[i]
 		node.position = pos - Vector2(LETTER_SCENE_SIZE, LETTER_SCENE_SIZE) * 0.5
+		node.set_meta("rest_pos", node.position)
 		node.play_pop_in(i * 0.05)
 	if shuffle_btn != null:
 		shuffle_btn.position = center - shuffle_btn.size * 0.5
@@ -408,6 +498,9 @@ func _layout_letters() -> void:
 func _shuffle_letters() -> void:
 	if not _running or _is_dragging:
 		return
+	_is_shuffling = true
+	_set_letters_to_rest()
+	Audio.play("wm_pop", 0.02, 0.8, -4.0)
 	_letters.shuffle()
 	var center := letters_holder.size * 0.5
 	var radius: float = minf(letters_holder.size.x, letters_holder.size.y) * 0.5 - LETTER_SCENE_SIZE * 0.5 - 8.0
@@ -418,18 +511,23 @@ func _shuffle_letters() -> void:
 		var tw := _letters[i].create_tween()
 		tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(_letters[i], "position", target, 0.3)
+		_letters[i].set_meta("rest_pos", target)
 	if shuffle_btn != null:
 		var tw := shuffle_btn.create_tween()
 		tw.tween_property(shuffle_btn, "rotation", shuffle_btn.rotation + TAU, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		shuffle_btn.pivot_offset = shuffle_btn.size * 0.5
+	await get_tree().create_timer(0.36).timeout
+	_is_shuffling = false
 
 func _process(delta: float) -> void:
 	# Pulse the drag line continuously while it has points.
 	_line_phase += delta * 4.0
+	_idle_phase += delta
 	if line != null and line.get_point_count() > 0:
 		var pulse: float = 0.7 + 0.3 * (0.5 + 0.5 * sin(_line_phase))
 		line.default_color = Color(1.0, 0.45, 0.75, pulse)
 		line.width = 8 + 2 * sin(_line_phase * 0.6)
+	_update_idle_letters()
 	if not _running:
 		return
 	_time_left -= delta
@@ -443,11 +541,17 @@ func _refresh_hud() -> void:
 	var s := int(_time_left) % 60
 	timer_label.text = "%d:%02d" % [m, s]
 	score_label.text = "%d XP" % _score
-	# Pulse the timer chip red when ≤ 30s remain.
+	var sec_left := int(ceil(_time_left))
+	if sec_left != _last_timer_second:
+		_last_timer_second = sec_left
+		_on_timer_second(sec_left)
+	# Shift the timer color as pressure rises.
 	if timer_chip != null:
-		if _time_left <= 30.0 and _running:
-			var pulse: float = 0.65 + 0.35 * sin(Engine.get_process_frames() * 0.18)
-			timer_chip.modulate = Color(1.0, pulse, pulse, 1.0)
+		if _time_left <= 10.0 and _running:
+			var pulse: float = 0.72 + 0.28 * sin(Engine.get_process_frames() * 0.28)
+			timer_chip.modulate = Color(1.0, pulse * 0.55, pulse * 0.55, 1.0)
+		elif _time_left <= 30.0 and _running:
+			timer_chip.modulate = Color(1.0, 0.78, 0.42, 1.0)
 		else:
 			timer_chip.modulate = Color(1, 1, 1, 1)
 
@@ -484,17 +588,19 @@ func _gui_input(event: InputEvent) -> void:
 
 func _begin_drag(gpos: Vector2) -> void:
 	_is_dragging = true
+	_submittable_announced = false
+	_set_letters_to_rest()
 	for n in _chain:
 		n.selected = false
 	_chain.clear()
-	_try_add_letter_at(gpos)
+	_handle_chain_feedback(_try_add_letter_at(gpos))
 	_update_line(gpos)
 	_update_preview()
 
 func _continue_drag(gpos: Vector2) -> void:
 	if not _is_dragging:
 		return
-	_try_add_letter_at(gpos)
+	_handle_chain_feedback(_try_add_letter_at(gpos))
 	_update_line(gpos)
 	_update_preview()
 
@@ -515,24 +621,52 @@ func _end_drag() -> void:
 		n.selected = false
 	_chain.clear()
 	if word.length() < MIN_WORD_LEN:
-		_shake_feedback("Too short!")
+		_short_drag_feedback()
 		preview_label.text = "—"
+		_update_xp_preview()
 		return
 	_submit(word, chain_positions, chain_colors)
 	preview_label.text = "—"
+	_update_xp_preview()
 
-func _try_add_letter_at(gpos: Vector2) -> void:
+func _try_add_letter_at(gpos: Vector2) -> int:
 	for n in _letters:
 		if n.contains_point(gpos):
 			if _chain.size() >= 2 and _chain[-2] == n:
 				var popped: WMLetter = _chain.pop_back()
 				popped.selected = false
-				return
+				return -1
 			if _chain.has(n):
-				return
+				return 0
 			_chain.append(n)
 			n.selected = true
-			return
+			return 1
+	return 0
+
+func _handle_chain_feedback(change: int) -> void:
+	if change == 1:
+		if _chain.size() == 1:
+			Audio.play("wm_pop", 0.02, 1.0, -3.0)
+			_haptic(18, 0.22)
+		else:
+			var semitone := pow(2.0, float(_chain.size() - 1) / 12.0)
+			Audio.play("select", 0.02, semitone, -2.5)
+		if _chain.size() >= MIN_WORD_LEN and not _submittable_announced:
+			_submittable_announced = true
+			_pulse_ready_state()
+	elif change == -1:
+		Audio.play("wm_thud", 0.01, 1.0, -9.0)
+	_update_xp_preview()
+
+func _pulse_ready_state() -> void:
+	Audio.play("wm_ready", 0.01, 1.0, -1.5)
+	_haptic(20, 0.28)
+	var tw := create_tween()
+	for i in 2:
+		tw.tween_callback(func(): _set_word_card_style(VIBRANT_MAGENTA, READY_GREEN, Color(0.25, 1.0, 0.45, 0.6)))
+		tw.tween_interval(0.08)
+		tw.tween_callback(_reset_word_card_style)
+		tw.tween_interval(0.08)
 
 func _update_line(cursor_gpos: Vector2) -> void:
 	line.clear_points()
@@ -561,10 +695,10 @@ func _update_preview() -> void:
 func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Array = []) -> void:
 	var word := word_upper.to_lower()
 	if _found.has(word):
-		_shake_feedback("Already found")
+		_already_found_feedback(word_upper)
 		return
 	if not Words.is_valid(word):
-		_shake_feedback("Not a word")
+		_invalid_word_feedback()
 		return
 	_found[word] = true
 	_found_order.append(word.to_upper())
@@ -575,23 +709,91 @@ func _submit(word_upper: String, chain_positions: Array = [], chain_colors: Arra
 	_refresh_hud()
 	_refresh_found()
 	_show_toast("+%d XP   %s" % [earned, word_upper], Palette.GREEN)
+	_success_feedback(word_upper, earned, chain_positions, chain_colors)
+	if _running and _all_words_found():
+		_new_pool()
 
-	# ----- WIN FX -----
-	var big := word.length() >= 5
+func _success_feedback(word_upper: String, earned: int, chain_positions: Array, chain_colors: Array) -> void:
+	var n := word_upper.length()
+	var center := _word_card_center()
+	var palette := BURST_BLUE
+	var count := 8
+	var radius := 70.0
+	var sound := "wm_success_low"
+	var haptic_ms := 42
+	var haptic_amp := 0.42
+	var include_stars := false
+	var include_confetti := false
+	var xp_big := false
+	var xp_color := Color("#ffd027")
+
+	if n == 4:
+		palette = BURST_GREEN
+		count = 10
+		radius = 88.0
+		sound = "wm_success_mid"
+	elif n == 5:
+		palette = BURST_PURPLE
+		count = 14
+		radius = 112.0
+		sound = "wm_success_mid"
+		haptic_ms = 58
+		haptic_amp = 0.58
+		include_stars = true
+		xp_big = true
+	elif n >= 6:
+		palette = BURST_GOLD
+		count = 24
+		radius = 170.0
+		sound = "wm_success_max"
+		haptic_ms = 86
+		haptic_amp = 0.82
+		include_stars = true
+		include_confetti = true
+		xp_big = true
+
+	_flash_word_card(READY_GREEN)
+	Fx.word_burst(self, center, count, palette, radius, include_stars, include_confetti)
+	Audio.play(sound, 0.02, 1.0, -1.0)
+	_haptic(haptic_ms, haptic_amp)
+
 	if board_bg != null:
 		var popup_pos := board_bg.global_position + Vector2(board_bg.size.x * 0.5 - 20, -10) - global_position
-		Fx.score_popup(self, popup_pos, "+%d" % earned, big, Color("#ffd027"))
-	# Confetti from each chain letter toward the score chip (top-right).
+		Fx.score_popup(self, popup_pos, "+%d" % earned, xp_big, xp_color)
 	if score_label != null and not chain_positions.is_empty():
 		var chip := score_label.get_parent() as Control
 		var target: Vector2 = chip.global_position + chip.size * 0.5 - global_position
 		Fx.confetti_to(self, chain_positions, target, chain_colors)
-	if big:
-		Fx.banner(self, word_upper, Color("#ff3aa8"), Color.WHITE)
+	if n >= 5:
+		_mascot_react("Great!" if n == 5 else "Amazing!")
+	if n >= 6:
+		Fx.banner(self, "AMAZING!", Color("#ffd027"), VIBRANT_MAGENTA_DARK)
+		Fx.board_rim_flash(self, board_bg, Color("#ffd027"), 3)
 		Fx.shake(self, 3.0, 0.2)
-		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.35))
-	if _running and _all_words_found():
-		_new_pool()
+		await get_tree().create_timer(0.11).timeout
+		_haptic(45, 0.7)
+
+func _invalid_word_feedback() -> void:
+	_show_toast("Not a word", Palette.RED)
+	_flash_word_card(ERROR_RED)
+	Audio.play("invalid", 0.02, 1.0, -1.5)
+	_haptic_error()
+	if word_card != null:
+		Fx.shake(word_card, 7.0, 0.35)
+
+func _already_found_feedback(word_upper: String) -> void:
+	_show_toast("Already found", Palette.RED)
+	_flash_word_card(Color("#ff9a2e"))
+	Audio.play("wm_known", 0.02, 1.0, -3.0)
+	_haptic(30, 0.36)
+	if word_card != null:
+		Fx.shake(word_card, 5.0, 0.24)
+		Fx.stamp(self, _word_card_center(), "X", Color("#ff9a2e"))
+	_highlight_found_pill(word_upper)
+
+func _short_drag_feedback() -> void:
+	Audio.play("wm_thud", 0.01, 0.75, -15.0)
+	_haptic(12, 0.12)
 
 func _all_words_found() -> bool:
 	for w: String in _possible_words:
@@ -605,13 +807,6 @@ func _new_pool() -> void:
 	_spawn_wave()
 	_refresh_found()
 
-func _shake_feedback(msg: String) -> void:
-	_show_toast(msg, Palette.RED)
-	if letters_holder != null:
-		Fx.shake(letters_holder, 7.0, 0.3)
-	if word_card != null:
-		Fx.shake(word_card, 5.0, 0.25)
-
 func _show_toast(msg: String, color: Color) -> void:
 	toast.text = msg
 	toast.add_theme_color_override("font_color", color)
@@ -620,9 +815,136 @@ func _show_toast(msg: String, color: Color) -> void:
 	tw.tween_interval(0.6)
 	tw.tween_property(toast, "modulate:a", 0.0, 0.4)
 
+func _word_card_center() -> Vector2:
+	if word_card == null:
+		return size * 0.5
+	return word_card.global_position + word_card.size * 0.5 - global_position
+
+func _set_word_card_style(bg: Color, border: Color, shadow: Color) -> void:
+	if _word_card_style == null:
+		return
+	_word_card_style.bg_color = bg
+	_word_card_style.border_color = border
+	_word_card_style.shadow_color = shadow
+	word_card.add_theme_stylebox_override("panel", _word_card_style)
+
+func _reset_word_card_style() -> void:
+	_set_word_card_style(VIBRANT_MAGENTA, VIBRANT_MAGENTA_DARK, Color(1.0, 0.4, 0.7, 0.45))
+
+func _flash_word_card(color: Color) -> void:
+	_word_card_flash_id += 1
+	var id := _word_card_flash_id
+	_set_word_card_style(Color.WHITE, color, Color(color.r, color.g, color.b, 0.7))
+	var tw := create_tween()
+	tw.tween_interval(0.08)
+	tw.tween_callback(func(): _set_word_card_style(color, color, Color(color.r, color.g, color.b, 0.55)))
+	tw.tween_interval(0.42)
+	tw.tween_callback(func():
+		if id == _word_card_flash_id:
+			_reset_word_card_style()
+	)
+
+func _update_xp_preview() -> void:
+	if xp_preview_label == null:
+		return
+	var w := _current_word()
+	if w.length() >= MIN_WORD_LEN and _is_dragging:
+		var preview := int(round(float(w.length() * 10) * GameState.mode_multiplier()))
+		xp_preview_label.text = "+%d XP" % preview
+		xp_preview_label.modulate.a = 1.0
+	else:
+		xp_preview_label.text = ""
+		xp_preview_label.modulate.a = 0.0
+
+func _highlight_found_pill(word_upper: String) -> void:
+	for c in found_pills_row.get_children():
+		if c is Label and (c as Label).text == word_upper:
+			var lbl := c as Label
+			var sb := lbl.get_theme_stylebox("normal") as StyleBoxFlat
+			if sb == null:
+				return
+			var old := sb.bg_color
+			var fresh := sb.duplicate() as StyleBoxFlat
+			lbl.add_theme_stylebox_override("normal", fresh)
+			var tw := create_tween()
+			tw.tween_callback(func(): fresh.bg_color = Color("#fff1a8"))
+			tw.tween_interval(0.28)
+			tw.tween_callback(func(): fresh.bg_color = old)
+			return
+
+func _set_letters_to_rest() -> void:
+	for n in _letters:
+		if n.has_meta("rest_pos"):
+			n.position = n.get_meta("rest_pos")
+
+func _update_idle_letters() -> void:
+	if _is_dragging or _is_shuffling:
+		return
+	for i in _letters.size():
+		var n := _letters[i]
+		if not n.has_meta("rest_pos"):
+			continue
+		var rest: Vector2 = n.get_meta("rest_pos")
+		var period := 2.5 + float(i % 4) * 0.28
+		var phase := _idle_phase / period * TAU + float(i) * 0.7
+		n.position = rest + Vector2(0, sin(phase) * 3.5)
+
+func _on_timer_second(sec_left: int) -> void:
+	if not _running or sec_left <= 0:
+		return
+	if sec_left <= 10:
+		Audio.play("wm_tick_fast", 0.0, 1.0, -1.0)
+		_haptic(12, 0.18)
+		_pulse_timer_chip(1.10)
+	elif sec_left <= 30:
+		Audio.play("wm_tick", 0.0, 1.0, -6.0)
+
+func _pulse_timer_chip(target_scale: float) -> void:
+	if timer_chip == null:
+		return
+	timer_chip.pivot_offset = timer_chip.size * 0.5
+	var tw := timer_chip.create_tween()
+	tw.tween_property(timer_chip, "scale", Vector2.ONE * target_scale, 0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(timer_chip, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _mascot_react(message: String) -> void:
+	if mascot == null:
+		return
+	mascot.pivot_offset = mascot.size * 0.5
+	var tw := mascot.create_tween()
+	tw.tween_property(mascot, "position:y", mascot.position.y - 10.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mascot, "position:y", mascot.position.y, 0.20).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	if mascot_speech != null and mascot_speech_label != null:
+		mascot_speech_label.text = message
+		mascot_speech.scale = Vector2.ZERO
+		var st := mascot_speech.create_tween()
+		st.tween_property(mascot_speech, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		st.tween_interval(1.0)
+		st.tween_property(mascot_speech, "scale", Vector2.ZERO, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+
+func _haptic(duration_ms: int, amplitude: float) -> void:
+	Input.vibrate_handheld(duration_ms, clampf(amplitude, 0.0, 1.0))
+
+func _haptic_error() -> void:
+	_haptic(24, 0.55)
+	await get_tree().create_timer(0.07).timeout
+	_haptic(24, 0.55)
+
 func _end_round() -> void:
 	_running = false
 	preview_label.text = "Time! %d XP, %d words" % [_score, _found.size()]
+	Audio.play("victory" if _score > 0 else "defeat", 0.02, 1.0, -1.5)
+	if _score > 0:
+		_haptic(80, 0.55)
+		await get_tree().create_timer(0.08).timeout
+		_haptic(80, 0.55)
+	else:
+		_haptic(60, 0.35)
+	if dim_overlay != null:
+		var dt := create_tween()
+		dt.tween_property(dim_overlay, "color", Color(0, 0, 0, 0.30), 0.4)
+	if _found.size() >= 3:
+		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.35))
 	# Build a capped list of missed words (top by length) for the results screen.
 	var missed_top: Array = []
 	var cap := 16
