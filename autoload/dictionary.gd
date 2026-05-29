@@ -4,6 +4,67 @@ extends Node
 ## (res://data/words.txt) — no code changes needed.
 
 const WORDS_PATH := "res://data/words.txt"
+const SENSITIVE_WORDS := {
+	"arse": true,
+	"asshole": true,
+	"bastard": true,
+	"bitch": true,
+	"bollock": true,
+	"bollocks": true,
+	"boner": true,
+	"boob": true,
+	"boobs": true,
+	"bugger": true,
+	"clit": true,
+	"cock": true,
+	"cocks": true,
+	"crap": true,
+	"cunt": true,
+	"damn": true,
+	"dick": true,
+	"dicks": true,
+	"dyke": true,
+	"fag": true,
+	"fags": true,
+	"fart": true,
+	"fuck": true,
+	"fucks": true,
+	"fucked": true,
+	"fucker": true,
+	"fucking": true,
+	"goddamn": true,
+	"hell": true,
+	"homo": true,
+	"jizz": true,
+	"kike": true,
+	"nazi": true,
+	"nigger": true,
+	"nigga": true,
+	"penis": true,
+	"piss": true,
+	"pissed": true,
+	"pussy": true,
+	"queer": true,
+	"rape": true,
+	"raped": true,
+	"raper": true,
+	"raping": true,
+	"retard": true,
+	"retarded": true,
+	"shit": true,
+	"shits": true,
+	"shitty": true,
+	"slut": true,
+	"sluts": true,
+	"spic": true,
+	"tit": true,
+	"tits": true,
+	"twat": true,
+	"vagina": true,
+	"whore": true,
+	"whores": true,
+	"wop": true,
+}
 
 var _words: Dictionary = {}      # word(lower) -> true, used as a hash set for O(1) is_valid
 # Parallel per-length signature buckets (built once at load):
@@ -22,6 +83,8 @@ func _load_words() -> void:
 	while not f.eof_reached():
 		var line := f.get_line().strip_edges().to_lower()
 		if line.is_empty() or line.begins_with("#"):
+			continue
+		if _is_sensitive(line):
 			continue
 		_words[line] = true
 		var n := line.length()
@@ -55,9 +118,22 @@ func _load_words() -> void:
 
 func is_valid(word: String) -> bool:
 	var w := word.strip_edges().to_lower()
+	if _is_sensitive(w):
+		return false
 	if _words.has(w):
 		return true
 	return _morph_valid(w)
+
+func _is_sensitive(word: String) -> bool:
+	var w := word.strip_edges().to_lower()
+	if SENSITIVE_WORDS.has(w):
+		return true
+	for suffix in ["s", "es", "ed", "er", "ers", "ing", "y"]:
+		if w.ends_with(suffix):
+			var stem := w.substr(0, w.length() - String(suffix).length())
+			if SENSITIVE_WORDS.has(stem):
+				return true
+	return false
 
 ## True if `word` is a standard inflected form of a base dictionary word.
 ## The bundled list (macOS web2) is a 1934 headword list with no plurals,
@@ -128,6 +204,14 @@ func _undoubled_valid(stem: String) -> bool:
 
 func size() -> int:
 	return _words.size()
+
+func words_of_length(length: int) -> Array[String]:
+	var out: Array[String] = []
+	if length < 0 or length >= _by_length_words.size():
+		return out
+	for w: String in _by_length_words[length]:
+		out.append(w)
+	return out
 
 ## Returns all dictionary words that can be formed by picking letters from
 ## `letters` (each occurrence consumed once unless `allow_reuse`).

@@ -8,6 +8,7 @@ const MAX_LIVES_INTERMEDIATE := 3
 const MAX_LIVES_ADVANCED := 2
 const COMBO_WINDOW_INTERMEDIATE := 6.0
 const COMBO_WINDOW_ADVANCED := 4.0
+const POOL_LENGTHS := [6, 7, 8]
 
 # Curated letter pools known to produce many valid sub-words.
 # (Picked to satisfy the vowel guarantee — each has ≥2 vowels.)
@@ -26,8 +27,8 @@ const POOLS_8 := [
 ]
 
 const GOAL_TYPES := ["word_count", "long_words", "xp_target", "speed_burst", "use_special", "no_mistakes"]
-const BASE_LENGTH_SCORE := {3: 10, 4: 20, 5: 40, 6: 80, 7: 160}
-const TARGET_REWARD := {3: 40, 4: 80, 5: 150, 6: 300, 7: 600}
+const BASE_LENGTH_SCORE := {3: 10, 4: 20, 5: 40, 6: 80, 7: 160, 8: 320}
+const TARGET_REWARD := {3: 40, 4: 80, 5: 150, 6: 300, 7: 600, 8: 900}
 const SECRET_WORDS := {
 	"nature": ["earth", "rain", "garden", "stream", "plant", "stone", "storm"],
 	"food": ["orange", "meat", "toast", "pear", "tea"],
@@ -107,6 +108,7 @@ var _last_timer_second: int = -1
 var _idle_phase: float = 0.0
 var _pool: String = ""             # current round pool
 var _used_pools: Array = []        # pools already used this session
+var _dictionary_pools_by_length: Dictionary = {}
 var _possible_words: Array = []    # all formable words from pool (length-desc)
 var _wave: int = 1
 var _lives: int = MAX_LIVES_INTERMEDIATE
@@ -161,9 +163,9 @@ func _build_ui() -> void:
 	var top := VBoxContainer.new()
 	top.anchor_right = 1.0
 	top.offset_left = 16
-	top.offset_top = Chrome.HEADER_H + 8
+	top.offset_top = Chrome.HEADER_H + 24
 	top.offset_right = -16
-	top.offset_bottom = 350
+	top.offset_bottom = 366
 	top.add_theme_constant_override("separation", 8)
 	add_child(top)
 
@@ -272,7 +274,7 @@ func _build_ui() -> void:
 	# stack and the footer hint — the previously-fixed 444×444 box left big
 	# empty bands on tall screens. The ring's radius is derived from the
 	# holder size, so a larger holder = larger ring automatically.
-	const BOARD_AREA_TOP := 288   # below the compact HUD + found card + current-word pill
+	const BOARD_AREA_TOP := 304   # below the compact HUD + found card + current-word pill
 	const BOARD_AREA_BOTTOM := -48  # above the footer hint
 	const BOARD_AREA_INSET := 8
 	board_bg = Fx.BoardBG.new()
@@ -381,47 +383,11 @@ func _build_ui() -> void:
 	add_child(dim_overlay)
 
 func _build_mascot() -> void:
-	mascot = Control.new()
-	mascot.anchor_left = 1.0
-	mascot.anchor_right = 1.0
-	mascot.offset_left = -118
-	mascot.offset_right = -12
-	mascot.offset_top = 0
-	mascot.offset_bottom = Chrome.HEADER_H
+	mascot = PanelContainer.new()
+	mascot.custom_minimum_size = Vector2(48, 48)
+	mascot.size_flags_horizontal = Control.SIZE_SHRINK_END
+	mascot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mascot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mascot.z_index = 120
-	add_child(mascot)
-
-	var bubble := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 0.94)
-	sb.set_corner_radius_all(14)
-	sb.content_margin_left = 9
-	sb.content_margin_right = 9
-	sb.content_margin_top = 5
-	sb.content_margin_bottom = 5
-	bubble.add_theme_stylebox_override("panel", sb)
-	bubble.position = Vector2(-82, 10)
-	bubble.custom_minimum_size = Vector2(82, 28)
-	bubble.scale = Vector2(0.0, 0.0)
-	bubble.pivot_offset = Vector2(76, 26)
-	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mascot_speech = bubble
-	mascot.add_child(bubble)
-	mascot_speech_label = Label.new()
-	mascot_speech_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mascot_speech_label.add_theme_font_size_override("font_size", 13)
-	mascot_speech_label.add_theme_color_override("font_color", DARK_CARD)
-	bubble.add_child(mascot_speech_label)
-
-	var avatar_chip := Control.new()
-	avatar_chip.position = Vector2(52, 10)
-	avatar_chip.size = Vector2(48, 48)
-	avatar_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mascot.add_child(avatar_chip)
-
-	var avatar_bg := Panel.new()
-	avatar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var avatar_sb := StyleBoxFlat.new()
 	avatar_sb.bg_color = GOLD_LIGHT
 	avatar_sb.set_corner_radius_all(24)
@@ -430,23 +396,26 @@ func _build_mascot() -> void:
 	avatar_sb.shadow_color = Color(VIBRANT_GOLD.r, VIBRANT_GOLD.g, VIBRANT_GOLD.b, 0.2)
 	avatar_sb.shadow_size = 4
 	avatar_sb.shadow_offset = Vector2i(0, 2)
-	avatar_bg.add_theme_stylebox_override("panel", avatar_sb)
-	avatar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	avatar_chip.add_child(avatar_bg)
+	avatar_sb.content_margin_left = 4
+	avatar_sb.content_margin_top = 4
+	avatar_sb.content_margin_right = 4
+	avatar_sb.content_margin_bottom = 4
+	(mascot as PanelContainer).add_theme_stylebox_override("panel", avatar_sb)
+	var header_row := back_btn.get_parent() as HBoxContainer
+	if header_row != null:
+		header_row.add_child(mascot)
+	else:
+		add_child(mascot)
 
 	mascot_icon = TextureRect.new()
 	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
 	if ResourceLoader.exists(path):
 		mascot_icon.texture = load(path)
-	mascot_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	mascot_icon.offset_left = 4
-	mascot_icon.offset_top = 4
-	mascot_icon.offset_right = -4
-	mascot_icon.offset_bottom = -4
+	mascot_icon.custom_minimum_size = Vector2(40, 40)
 	mascot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	mascot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	mascot_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	avatar_chip.add_child(mascot_icon)
+	mascot.add_child(mascot_icon)
 
 func _hud_chip(text: String, bg: Color, fg: Color, border: Color = Color(0, 0, 0, 0), icon_path: String = "") -> Label:
 	# Returns the inner Label so the caller can update text. The parent is an
@@ -542,28 +511,103 @@ func _spawn_wave() -> void:
 		c.queue_free()
 	_letters.clear()
 	_chain.clear()
-	var pool := _pick_pool()
+	var picked := _pick_pool_with_words()
+	var pool: String = picked.pool
 	_pool = pool
-	_possible_words = Words.words_from_letters(pool, MIN_WORD_LEN, false)
-	_possible_words.sort_custom(func(a, b):
+	_possible_words = picked.words
+	_spawn_letters(pool)
+	_layout_letters()
+
+func _pick_pool_with_words() -> Dictionary:
+	var lengths := POOL_LENGTHS.duplicate()
+	lengths.shuffle()
+	for length: int in lengths:
+		var picked := _pick_pool_for_length(length, false)
+		if not picked.is_empty():
+			return picked
+	_used_pools.clear()
+	for length: int in lengths:
+		var picked := _pick_pool_for_length(length, true)
+		if not picked.is_empty():
+			return picked
+	var fallback := str(POOLS_7.pick_random())
+	return {"pool": fallback, "words": _sorted_possible_words(fallback)}
+
+func _pick_pool_for_length(length: int, allow_used: bool) -> Dictionary:
+	var src := _dictionary_pool_source(length)
+	src.shuffle()
+	for p: String in src:
+		if not allow_used and _used_pools.has(p):
+			continue
+		var words := _sorted_possible_words(p)
+		if _pool_supports_wave(words):
+			_used_pools.append(p)
+			return {"pool": p, "words": words}
+	return {}
+
+func _dictionary_pool_source(length: int) -> Array[String]:
+	if _dictionary_pools_by_length.has(length):
+		var cached: Array[String] = []
+		for p: String in _dictionary_pools_by_length[length]:
+			cached.append(p)
+		return cached
+	var pools: Array[String] = []
+	for w: String in Words.words_of_length(length):
+		var pool := w.to_upper()
+		if _is_pool_candidate(pool):
+			pools.append(pool)
+	if pools.is_empty():
+		pools = _fallback_pools_for_length(length)
+	_dictionary_pools_by_length[length] = pools
+	return pools.duplicate()
+
+func _fallback_pools_for_length(length: int) -> Array[String]:
+	match length:
+		6:
+			return POOLS_6.duplicate()
+		8:
+			return POOLS_8.duplicate()
+		_:
+			return POOLS_7.duplicate()
+
+func _is_pool_candidate(pool: String) -> bool:
+	if not POOL_LENGTHS.has(pool.length()) or _count_vowels_text(pool) < 2:
+		return false
+	for i in pool.length():
+		var code := pool.unicode_at(i)
+		if code < 65 or code > 90:
+			return false
+	return true
+
+func _count_vowels_text(text: String) -> int:
+	var v := 0
+	for ch in text:
+		if "AEIOU".find(ch) != -1:
+			v += 1
+	return v
+
+func _sorted_possible_words(pool: String) -> Array[String]:
+	var words: Array[String] = Words.words_from_letters(pool, MIN_WORD_LEN, false)
+	words.sort_custom(func(a, b):
 		if a.length() != b.length():
 			return a.length() > b.length()
 		return a < b
 	)
-	_spawn_letters(pool)
-	_layout_letters()
+	return words
 
-func _pick_pool() -> String:
-	var src: Array = POOLS_7.duplicate()
-	src.shuffle()
-	for p: String in src:
-		if not _used_pools.has(p):
-			_used_pools.append(p)
-			return p
-	_used_pools.clear()
-	src.shuffle()
-	_used_pools.append(src[0])
-	return src[0]
+func _pool_supports_wave(words: Array[String]) -> bool:
+	if words.size() < maxi(8, _goal_target + 3):
+		return false
+	if _goal_type == "long_words":
+		var long_count := 0
+		for w: String in words:
+			if w.length() >= 4:
+				long_count += 1
+		return long_count >= _goal_target
+	for w: String in words:
+		if w.length() >= 4:
+			return true
+	return false
 
 func _select_goal() -> void:
 	var goals := GOAL_TYPES.duplicate()
@@ -1545,8 +1589,8 @@ func _mascot_react(message: String) -> void:
 		return
 	mascot.pivot_offset = mascot.size * 0.5
 	var tw := mascot.create_tween()
-	tw.tween_property(mascot, "position:y", mascot.position.y - 10.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(mascot, "position:y", mascot.position.y, 0.20).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mascot, "scale", Vector2.ONE * 1.12, 0.13).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mascot, "scale", Vector2.ONE, 0.20).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if mascot_speech != null and mascot_speech_label != null:
 		mascot_speech_label.text = message
 		mascot_speech.scale = Vector2.ZERO

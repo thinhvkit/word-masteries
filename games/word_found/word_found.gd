@@ -32,10 +32,19 @@ const VIBRANT_MAGENTA := Color("#ff3aa8")
 const VIBRANT_MAGENTA_DARK := Color("#7a0e4a")
 const DARK_CARD := Color("#1a1240")
 const DARK_CARD_BORDER := Color("#3a2a78")
+const READY_GREEN := Color("#3ad66e")
+const ERROR_RED := Color("#ff4a5c")
+
+const BURST_BLUE := [Color("#7fd4ff"), Color("#3aa8ff"), Color("#dff5ff")]
+const BURST_GREEN := [Color("#5be68a"), Color("#2fc462"), Color("#d8ffd8")]
+const BURST_PURPLE := [Color("#b07aff"), Color("#ff7ad1"), Color("#f0d8ff")]
+const BURST_GOLD := [Color("#ffd027"), Color("#ff8a2a"), Color("#3aa8ff"), Color("#ff3aa8"), Color("#3ad6a8")]
 
 const MIN_WORD_LEN := 3
 const MAX_WAVE := 40                      # GDD hard ceiling
 const BONUS_LONG_MULT := 1.5              # >target length → base × 1.5
+const ANCHOR_POOL_LENGTHS := [8, 9, 10, 11, 12]
+const MAX_DICTIONARY_POOL_ATTEMPTS := 160
 
 # Curated 10–12 letter anchor pools rich in sub-words. Each is verified by
 # the dictionary at runtime; if a pool fails the target-count check we resample.
@@ -111,15 +120,21 @@ var _score_chip: Control             # captured for confetti targeting
 var _wave_chip: Control
 var _row2_pill: PanelContainer
 var _words_count_lbl: Label
+var _mascot: Control
+var _mascot_icon: TextureRect
+var _mascot_speech: PanelContainer
+var _mascot_speech_label: Label
 var _total_words: int = 0
 var _pool_letters: String = ""
 var _used_pools: Array = []          # pools already used this session
+var _dictionary_anchor_pools_by_length: Dictionary = {}
 var _row1_tiles: Array = []          # all 10-12 tiles in Row 1; their state tells the rest
 var _row2_chain: Array = []          # ordered subset currently in Row 2
 var _targets: Array = []             # [{"count":N,"len":L,"done":k}, ...]
 var _bonus_words: Array = []
 var _used_words: Dictionary = {}
 var _running: bool = false
+var _submit_ready_announced: bool = false
 
 func _ready() -> void:
 	back_btn.visible = false  # replaced by chrome header
@@ -129,58 +144,16 @@ func _ready() -> void:
 		_start_wave(1)
 
 func _apply_design() -> void:
-	# Dark arena backdrop instead of cream.
-	var arena_bg := Fx.ArenaBG.new()
-	arena_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	arena_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	arena_bg.set_world(0)
-	add_child(arena_bg)
-	move_child(arena_bg, 0)
-
-	# Dark header matching Word Fight.
-	var hdr_panel := PanelContainer.new()
-	hdr_panel.anchor_right = 1.0
-	hdr_panel.offset_bottom = Chrome.HEADER_H
-	var hdr_sb := StyleBoxFlat.new()
-	hdr_sb.bg_color = Color(0.06, 0.04, 0.10, 0.85)
-	hdr_sb.shadow_color = Color(0, 0, 0, 0.4)
-	hdr_sb.shadow_size = 6
-	hdr_sb.shadow_offset = Vector2i(0, 2)
-	hdr_sb.content_margin_left = 16
-	hdr_sb.content_margin_right = 16
-	hdr_sb.content_margin_top = 18
-	hdr_sb.content_margin_bottom = 16
-	hdr_panel.add_theme_stylebox_override("panel", hdr_sb)
-	add_child(hdr_panel)
-	var hdr_row := HBoxContainer.new()
-	hdr_row.add_theme_constant_override("separation", 12)
-	hdr_panel.add_child(hdr_row)
-	var hdr_back := Button.new()
-	hdr_back.text = ""
-	hdr_back.focus_mode = Control.FOCUS_NONE
-	var arrow_path := "res://assets/icons/arrow_left.svg"
-	if ResourceLoader.exists(arrow_path):
-		hdr_back.icon = load(arrow_path)
-		hdr_back.expand_icon = false
-		hdr_back.modulate = Color("#c0b4a6")
-	var empty_sb := StyleBoxEmpty.new()
-	for s_name in ["normal", "hover", "pressed", "focus"]:
-		hdr_back.add_theme_stylebox_override(s_name, empty_sb)
-	hdr_back.custom_minimum_size = Vector2(48, 48)
-	hdr_row.add_child(hdr_back)
-	var title_lbl := Label.new()
-	title_lbl.text = "Word Found"
-	title_lbl.add_theme_font_size_override("font_size", 20)
-	title_lbl.add_theme_color_override("font_color", Color("#f5efe8"))
-	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hdr_row.add_child(title_lbl)
+	Chrome.bg_layer(self)
+	var hdr_back := Chrome.header(self, "Word Found")
+	_build_header_avatar(hdr_back)
 	hdr_back.pressed.connect(func():
 		_save_session()
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 	)
 
 	var v := $V as Control
-	v.offset_top = Chrome.HEADER_H + 8
+	v.offset_top = Chrome.HEADER_H + 24
 
 	# HUD row — vibrant chip pills.
 	wave_lbl.add_theme_font_size_override("font_size", 20)
@@ -197,24 +170,24 @@ func _apply_design() -> void:
 	targets_label_node.add_theme_font_size_override("font_size", 16)
 	_wrap_in_dark_card([targets_label_node, targets_box], v)
 
-	# Row2: dark word display pill with green border.
+	# Row2: Word Match-style current-word pill.
 	row2_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
 	row2_label.add_theme_font_size_override("font_size", 14)
 	row2_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	var row2_node: Control = $V/Row2
 	_row2_pill = PanelContainer.new()
 	var pill_sb := StyleBoxFlat.new()
-	pill_sb.bg_color = Color(0.08, 0.12, 0.08, 0.85)
-	pill_sb.set_corner_radius_all(16)
-	pill_sb.set_border_width_all(2)
-	pill_sb.border_color = Color(0.35, 0.7, 0.4, 0.35)
-	pill_sb.shadow_color = Color(0, 0, 0, 0.3)
+	pill_sb.bg_color = VIBRANT_MAGENTA
+	pill_sb.set_corner_radius_all(22)
+	pill_sb.set_border_width_all(3)
+	pill_sb.border_color = VIBRANT_MAGENTA_DARK
+	pill_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.38)
 	pill_sb.shadow_size = 6
-	pill_sb.shadow_offset = Vector2i(0, 3)
+	pill_sb.shadow_offset = Vector2i(0, 2)
 	pill_sb.content_margin_left = 20
 	pill_sb.content_margin_right = 20
-	pill_sb.content_margin_top = 14
-	pill_sb.content_margin_bottom = 14
+	pill_sb.content_margin_top = 10
+	pill_sb.content_margin_bottom = 10
 	_row2_pill.add_theme_stylebox_override("panel", pill_sb)
 	_row2_pill.custom_minimum_size = Vector2(0, 60)
 	v.add_child(_row2_pill)
@@ -278,6 +251,41 @@ func _apply_design() -> void:
 	submit_btn.text = "Submit"
 	_submit_glow = null
 	submit_btn.disabled = true
+
+func _build_header_avatar(hdr_back: Button) -> void:
+	_mascot = PanelContainer.new()
+	_mascot.custom_minimum_size = Vector2(48, 48)
+	_mascot.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_mascot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_mascot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var avatar_sb := StyleBoxFlat.new()
+	avatar_sb.bg_color = GOLD_LIGHT
+	avatar_sb.set_corner_radius_all(24)
+	avatar_sb.set_border_width_all(2)
+	avatar_sb.border_color = VIBRANT_GOLD
+	avatar_sb.shadow_color = Color(VIBRANT_GOLD.r, VIBRANT_GOLD.g, VIBRANT_GOLD.b, 0.2)
+	avatar_sb.shadow_size = 4
+	avatar_sb.shadow_offset = Vector2i(0, 2)
+	avatar_sb.content_margin_left = 4
+	avatar_sb.content_margin_top = 4
+	avatar_sb.content_margin_right = 4
+	avatar_sb.content_margin_bottom = 4
+	(_mascot as PanelContainer).add_theme_stylebox_override("panel", avatar_sb)
+	var header_row := hdr_back.get_parent() as HBoxContainer
+	if header_row != null:
+		header_row.add_child(_mascot)
+	else:
+		add_child(_mascot)
+
+	_mascot_icon = TextureRect.new()
+	var path := "res://assets/avatars/%s.svg" % GameState.player_avatar
+	if ResourceLoader.exists(path):
+		_mascot_icon.texture = load(path)
+	_mascot_icon.custom_minimum_size = Vector2(40, 40)
+	_mascot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_mascot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_mascot_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mascot.add_child(_mascot_icon)
 
 func _wrap_in_vibrant_chip(lbl: Label, bg: Color, border: Color) -> Control:
 	var parent := lbl.get_parent() as Control
@@ -499,16 +507,68 @@ func _template_for_wave(w: int) -> Array:
 	return (TEMPLATES[tier][mode_key] as Array).duplicate(true)
 
 func _pick_pool(template: Array) -> Dictionary:
-	var attempts := POOLS.duplicate()
-	attempts.shuffle()
-	for p: String in attempts:
-		if _used_pools.has(p):
-			continue
-		var avail := _bucket_words(p)
-		if _template_satisfiable(template, avail):
-			_used_pools.append(p)
-			return {"pool": p, "targets": _annotate_targets(template)}
+	var picked := _pick_dictionary_pool(template, false)
+	if not picked.is_empty():
+		return picked
 	_used_pools.clear()
+	picked = _pick_dictionary_pool(template, true)
+	if not picked.is_empty():
+		return picked
+	return _pick_curated_pool(template)
+
+func _pick_dictionary_pool(template: Array, allow_used: bool) -> Dictionary:
+	var lengths := ANCHOR_POOL_LENGTHS.duplicate()
+	lengths.shuffle()
+	var checked := 0
+	for length: int in lengths:
+		var attempts := _dictionary_anchor_source(length)
+		attempts.shuffle()
+		for p: String in attempts:
+			if checked >= MAX_DICTIONARY_POOL_ATTEMPTS:
+				return {}
+			checked += 1
+			if not allow_used and _used_pools.has(p):
+				continue
+			var avail := _bucket_words(p)
+			if _template_satisfiable(template, avail):
+				_used_pools.append(p)
+				return {"pool": p, "targets": _annotate_targets(template)}
+	return {}
+
+func _dictionary_anchor_source(length: int) -> Array[String]:
+	if _dictionary_anchor_pools_by_length.has(length):
+		var cached: Array[String] = []
+		for p: String in _dictionary_anchor_pools_by_length[length]:
+			cached.append(p)
+		return cached
+	var pools: Array[String] = []
+	for w: String in Words.words_of_length(length):
+		var pool := w.to_upper()
+		if _is_anchor_candidate(pool):
+			pools.append(pool)
+	if pools.is_empty():
+		pools = POOLS.duplicate()
+	_dictionary_anchor_pools_by_length[length] = pools
+	return pools.duplicate()
+
+func _is_anchor_candidate(pool: String) -> bool:
+	if not ANCHOR_POOL_LENGTHS.has(pool.length()) or _count_vowels_text(pool) < 3:
+		return false
+	for i in pool.length():
+		var code := pool.unicode_at(i)
+		if code < 65 or code > 90:
+			return false
+	return true
+
+func _count_vowels_text(text: String) -> int:
+	var v := 0
+	for ch in text:
+		if "AEIOU".find(ch) != -1:
+			v += 1
+	return v
+
+func _pick_curated_pool(template: Array) -> Dictionary:
+	var attempts := POOLS.duplicate()
 	attempts.shuffle()
 	for p: String in attempts:
 		var avail := _bucket_words(p)
@@ -581,6 +641,8 @@ func _on_row1_tile_pressed(t: WFoundTile) -> void:
 		t.state = TileState.MOVED
 		t.selection_index = _row2_chain.size()
 		_row2_chain.append(t)
+		Audio.play("select", 0.02, pow(2.0, float(_row2_chain.size() - 1) / 12.0), -2.5)
+		_haptic(16, 0.2)
 		_refresh_row2_label()
 		_update_submit_state()
 	elif t.state == TileState.MOVED:
@@ -590,6 +652,7 @@ func _on_row1_tile_pressed(t: WFoundTile) -> void:
 			for rt: WFoundTile in to_revert:
 				rt.state = TileState.AVAILABLE
 			_row2_chain.resize(idx)
+		Audio.play("wm_thud", 0.01, 1.0, -10.0)
 		_reindex_chain()
 		_refresh_row2_label()
 		_update_submit_state()
@@ -607,6 +670,7 @@ func _clear_chain() -> void:
 	for t: WFoundTile in _row2_chain.duplicate():
 		t.state = TileState.AVAILABLE
 	_row2_chain.clear()
+	_submit_ready_announced = false
 	_refresh_row2_label()
 	_update_submit_state()
 
@@ -662,7 +726,13 @@ func _update_submit_state() -> void:
 	submit_btn.disabled = not valid
 	if valid:
 		_dungeon_btn(submit_btn, Color("#1a5a2a"), Color("#3a8a4a"), Color.WHITE)
+		if not _submit_ready_announced:
+			_submit_ready_announced = true
+			Audio.play("wm_ready", 0.01, 1.0, -2.0)
+			_haptic(20, 0.28)
+			_flash_row2_pill(READY_GREEN)
 	else:
+		_submit_ready_announced = false
 		_dungeon_btn(submit_btn, Color(0.08, 0.12, 0.08), Color(0.35, 0.7, 0.4, 0.25), Color(1, 1, 1, 0.2))
 
 # ---------------- targets box ----------------
@@ -724,14 +794,7 @@ func _submit_word() -> void:
 		froms.append(t.global_position + t.size * 0.5 - global_position)
 		var g := Fx.gradient_for_letter(t.letter)
 		cols.append(g[1])
-	if _score_chip != null:
-		var target: Vector2 = _score_chip.global_position + _score_chip.size * 0.5 - global_position
-		Fx.confetti_to(self, froms, target, cols)
-		Fx.score_popup(self, target + Vector2(-10, 24), "+%d" % earned, word.length() >= 5, VIBRANT_GOLD)
-	if word.length() >= 5:
-		Fx.banner(self, word_up, VIBRANT_MAGENTA, Color.WHITE)
-		Fx.shake(self, 3.0, 0.22)
-		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
+	_success_feedback(word_up, earned, matched_target, froms, cols)
 
 	_total_words += 1
 	if _words_count_lbl != null:
@@ -739,6 +802,7 @@ func _submit_word() -> void:
 	for t: WFoundTile in _row2_chain:
 		t.state = TileState.AVAILABLE
 	_row2_chain.clear()
+	_submit_ready_announced = false
 	_refresh_row2_label()
 	_update_submit_state()
 	_refresh_targets_box()
@@ -750,12 +814,76 @@ func _submit_word() -> void:
 		_set_status("Wave %d cleared! +%d XP" % [_wave, earned])
 		Fx.banner(self, "WAVE %d!" % _wave, VIBRANT_GOLD, VIBRANT_GOLD_DARK)
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
+		_mascot_react("Wave!")
 		_running = false
 		await get_tree().create_timer(0.9).timeout
 		_start_wave(_wave + 1)
 		return
 
 	_set_status("+%d XP — %s" % [earned, word_up])
+
+func _success_feedback(word_up: String, earned: int, matched_target: bool, froms: Array, cols: Array) -> void:
+	var n := word_up.length()
+	var palette := BURST_BLUE
+	var count := 8
+	var radius := 70.0
+	var sound := "wm_success_low"
+	var haptic_ms := 38
+	var haptic_amp := 0.38
+	var include_stars := false
+	var include_confetti := false
+	var big_score := false
+
+	if n == 4:
+		palette = BURST_GREEN
+		count = 10
+		radius = 88.0
+		sound = "wm_success_mid"
+	elif n == 5:
+		palette = BURST_PURPLE
+		count = 14
+		radius = 112.0
+		sound = "wm_success_mid"
+		haptic_ms = 56
+		haptic_amp = 0.56
+		include_stars = true
+		big_score = true
+	elif n >= 6:
+		palette = BURST_GOLD
+		count = 24
+		radius = 160.0
+		sound = "wm_success_max"
+		haptic_ms = 82
+		haptic_amp = 0.78
+		include_stars = true
+		include_confetti = true
+		big_score = true
+
+	var center := _row2_center()
+	_flash_row2_pill(READY_GREEN if matched_target else VIBRANT_GOLD)
+	Fx.word_burst(self, center, count, palette, radius, include_stars, include_confetti)
+	Audio.play(sound, 0.02, 1.0, -1.0)
+	_haptic(haptic_ms, haptic_amp)
+
+	if _score_chip != null:
+		var target: Vector2 = _score_chip.global_position + _score_chip.size * 0.5 - global_position
+		Fx.confetti_to(self, froms, target, cols)
+		Fx.score_popup(self, target + Vector2(-10, 24), "+%d" % earned, big_score, VIBRANT_GOLD)
+	if matched_target:
+		Fx.board_rim_flash(self, targets_box, READY_GREEN, 2)
+	elif n >= 4:
+		Fx.banner(self, "BONUS WORD", VIBRANT_GOLD, VIBRANT_GOLD_DARK)
+	if n >= 5:
+		Fx.banner(self, word_up, VIBRANT_MAGENTA, Color.WHITE)
+		Fx.shake(self, 3.0, 0.2)
+		_mascot_react("Great!" if n == 5 else "Amazing!")
+	if n >= 6:
+		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
+
+func _row2_center() -> Vector2:
+	if _row2_pill == null:
+		return size * 0.5
+	return _row2_pill.global_position + _row2_pill.size * 0.5 - global_position
 
 func _targets_complete() -> bool:
 	for t in _targets:
@@ -842,10 +970,58 @@ func _load_session() -> bool:
 # ---------------- small pip widget ----------------
 
 func _invalid_shake() -> void:
+	Audio.play("invalid", 0.02, 1.0, -1.5)
+	_haptic_error()
+	_flash_row2_pill(ERROR_RED)
 	if _row2_pill != null:
 		Fx.shake(_row2_pill, 6.0, 0.28)
 	if _row1_card != null:
 		Fx.shake(_row1_card, 4.0, 0.2)
+
+func _flash_row2_pill(color: Color) -> void:
+	if _row2_pill == null:
+		return
+	var sb := _row2_pill.get_theme_stylebox("panel") as StyleBoxFlat
+	if sb == null:
+		return
+	var old_bg := sb.bg_color
+	var old_border := sb.border_color
+	var old_shadow := sb.shadow_color
+	var tw := create_tween()
+	tw.tween_callback(func():
+		sb.bg_color = color
+		sb.border_color = color
+		sb.shadow_color = Color(color.r, color.g, color.b, 0.55)
+	)
+	tw.tween_interval(0.16)
+	tw.tween_callback(func():
+		sb.bg_color = old_bg
+		sb.border_color = old_border
+		sb.shadow_color = old_shadow
+	)
+
+func _mascot_react(message: String) -> void:
+	if _mascot == null:
+		return
+	_mascot.pivot_offset = _mascot.size * 0.5
+	var tw := _mascot.create_tween()
+	tw.tween_property(_mascot, "scale", Vector2.ONE * 1.12, 0.13).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_mascot, "scale", Vector2.ONE, 0.20).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if _mascot_speech != null and _mascot_speech_label != null:
+		_mascot_speech_label.text = message
+		_mascot_speech.scale = Vector2.ZERO
+		var st := _mascot_speech.create_tween()
+		st.tween_property(_mascot_speech, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		st.tween_interval(0.85)
+		st.tween_property(_mascot_speech, "scale", Vector2.ZERO, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+
+func _haptic(duration_ms: int, amplitude: float) -> void:
+	Input.vibrate_handheld(duration_ms, clampf(amplitude, 0.0, 1.0))
+
+func _haptic_error() -> void:
+	_haptic(24, 0.55)
+	await get_tree().create_timer(0.07).timeout
+	_haptic(24, 0.55)
 
 class _TargetRow extends Control:
 	const _FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
