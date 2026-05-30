@@ -139,28 +139,37 @@ func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) ->
 
 func _draw_letter(center: Vector2, col: Color) -> void:
 	var f: Font = LETTER_FONT
-	var fs := 50
+	var fs := 54
 	var shown := "*" if tile_kind == TileKind.WILD else ("?" if tile_kind == TileKind.POISON else letter)
 	var ts := f.get_string_size(shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
 	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5 + 1.0)
+	var stroke := Color(0.16, 0.08, 0.18, 0.58)
 	draw_string(f, base + Vector2(0, 4), shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.52))
 	draw_string(f, base + Vector2(1, 2), shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.28))
-	for o in [Vector2(-0.8, 0), Vector2(0.8, 0), Vector2(0, -0.6), Vector2(0, 0.6)]:
+	for o in [Vector2(-2.1, 0), Vector2(2.1, 0), Vector2(0, -2.0), Vector2(0, 2.0), Vector2(-1.5, -1.5), Vector2(1.5, -1.5), Vector2(-1.5, 1.5), Vector2(1.5, 1.5)]:
+		draw_string(f, base + o, shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, stroke)
+	for o in [Vector2(-1.0, 0), Vector2(1.0, 0), Vector2(0, -0.8), Vector2(0, 0.8)]:
 		draw_string(f, base + o, shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
 	draw_string(f, base, shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
 	_draw_letter_cues(center, shown, col)
 
 func _draw_letter_cues(center: Vector2, shown: String, col: Color) -> void:
 	if shown == "I":
-		var cue_shadow := Color(0, 0, 0, 0.22)
-		draw_line(center + Vector2(-11, -18), center + Vector2(11, -18), cue_shadow, 5.0, true)
-		draw_line(center + Vector2(-11, 18), center + Vector2(11, 18), cue_shadow, 5.0, true)
-		draw_line(center + Vector2(-10, -19), center + Vector2(10, -19), col, 3.0, true)
-		draw_line(center + Vector2(-10, 17), center + Vector2(10, 17), col, 3.0, true)
+		var cue_shadow := Color(0.16, 0.08, 0.18, 0.58)
+		draw_line(center + Vector2(-13, -20), center + Vector2(13, -20), cue_shadow, 7.0, true)
+		draw_line(center + Vector2(-13, 20), center + Vector2(13, 20), cue_shadow, 7.0, true)
+		draw_line(center + Vector2(-12, -21), center + Vector2(12, -21), col, 4.0, true)
+		draw_line(center + Vector2(-12, 19), center + Vector2(12, 19), col, 4.0, true)
 	elif shown == "D":
-		draw_line(center + Vector2(-12, -19), center + Vector2(-12, 19), Color(0, 0, 0, 0.20), 3.0, true)
+		draw_line(center + Vector2(-15, -21), center + Vector2(-15, 21), Color(0.16, 0.08, 0.18, 0.46), 5.0, true)
+		draw_line(center + Vector2(-14, -20), center + Vector2(-14, 20), col, 2.5, true)
+	elif shown == "T":
+		draw_line(center + Vector2(-16, -21), center + Vector2(16, -21), Color(0.16, 0.08, 0.18, 0.42), 5.0, true)
+		draw_line(center + Vector2(-15, -22), center + Vector2(15, -22), col, 2.5, true)
+	elif shown == "O":
+		draw_arc(center + Vector2(0, 2), 15.5, 0.15, TAU - 0.15, 42, Color(0.16, 0.08, 0.18, 0.38), 3.0, true)
 
 func _draw_special_mark(center: Vector2, r: float, candy: Dictionary) -> void:
 	var mark := str(candy.get("mark", ""))

@@ -147,13 +147,18 @@ func _build_ui() -> void:
 	back_btn = Chrome.header(self, "Word Match")
 	_build_mascot()
 
+	const BOARD_AREA_TOP := 360   # below HUD + status card + current-word pill
+	const BOARD_AREA_BOTTOM := -48  # above the footer hint
+	const BOARD_AREA_INSET := 8
+	const TOP_STACK_GAP := 16
+
 	# Top stack (HUD chips, found card, current word).
 	var top := VBoxContainer.new()
 	top.anchor_right = 1.0
 	top.offset_left = 16
 	top.offset_top = Chrome.HEADER_H + 24
 	top.offset_right = -16
-	top.offset_bottom = 366
+	top.offset_bottom = Chrome.HEADER_H + BOARD_AREA_TOP - TOP_STACK_GAP
 	top.add_theme_constant_override("separation", 8)
 	add_child(top)
 
@@ -257,9 +262,6 @@ func _build_ui() -> void:
 	# stack and the footer hint — the previously-fixed 444×444 box left big
 	# empty bands on tall screens. The ring's radius is derived from the
 	# holder size, so a larger holder = larger ring automatically.
-	const BOARD_AREA_TOP := 304   # below the compact HUD + found card + current-word pill
-	const BOARD_AREA_BOTTOM := -48  # above the footer hint
-	const BOARD_AREA_INSET := 8
 	board_bg = Fx.BoardBG.new()
 	board_bg.radius = 28.0
 	board_bg.anchor_left = 0.0

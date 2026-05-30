@@ -971,7 +971,8 @@ func _submit_word() -> void:
 
 	_save_session()
 	if _targets_complete():
-		_set_status("Wave %d cleared! +%d XP" % [_wave, earned])
+		_award_hint("+1 Hint!")
+		_set_status("Wave %d cleared! +%d XP, +1 Hint" % [_wave, earned])
 		Fx.banner(self, "WAVE %d!" % _wave, VIBRANT_GOLD, VIBRANT_GOLD_DARK)
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
 		_mascot_react("Wave!")
@@ -1065,10 +1066,18 @@ func _add_bonus_hint_progress() -> void:
 	_bonus_hint_progress += 1
 	while _bonus_hint_progress >= BONUS_WORDS_PER_HINT:
 		_bonus_hint_progress -= BONUS_WORDS_PER_HINT
-		_hints += 1
-		Fx.banner(self, "+1 HINT", VIBRANT_BLUE, Color.WHITE)
-		_mascot_react("Hint!")
-		_haptic(38, 0.42)
+		_award_hint("+1 Hint!")
+
+func _award_hint(label: String) -> void:
+	_hints += 1
+	_refresh_hint_button()
+	if _hint_btn != null:
+		var pos := _hint_btn.global_position + Vector2(4, -8) - global_position
+		Fx.score_popup(self, pos, label, false, VIBRANT_BLUE)
+	else:
+		Fx.banner(self, label.to_upper(), VIBRANT_BLUE, Color.WHITE)
+	_mascot_react("Hint!")
+	_haptic(38, 0.42)
 
 func _use_hint() -> void:
 	if not _running:
@@ -1084,7 +1093,7 @@ func _use_hint() -> void:
 		return
 	_hints -= 1
 	_refresh_hint_button()
-	_set_status("Hint: try %s" % hint_word.to_upper())
+	_set_status("Starts with: %s" % _hint_silhouette(hint_word))
 	Fx.banner(self, "HINT", VIBRANT_BLUE, Color.WHITE)
 	_mascot_react("Try it!")
 	_haptic(28, 0.32)
@@ -1106,10 +1115,19 @@ func _pick_hint_word() -> String:
 			return w
 	return ""
 
+func _hint_silhouette(word: String) -> String:
+	var up := word.to_upper()
+	if up.is_empty():
+		return ""
+	var parts: Array[String] = [up.substr(0, 1)]
+	for i in range(1, up.length()):
+		parts.append("_")
+	return " ".join(parts)
+
 func _refresh_hint_button() -> void:
 	if _hint_btn == null:
 		return
-	_hint_btn.text = "Hint %d\n%d/%d" % [_hints, _bonus_hint_progress, BONUS_WORDS_PER_HINT]
+	_hint_btn.text = "💡 %d\n%d/%d" % [_hints, _bonus_hint_progress, BONUS_WORDS_PER_HINT]
 	_hint_btn.disabled = _hints <= 0
 	if _hints > 0:
 		_dungeon_btn(_hint_btn, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
@@ -1278,7 +1296,7 @@ class _TargetRow extends Control:
 		6: {"top": Color("#FFD740"), "bot": Color("#FFB300"), "glow": Color("#FFE57F")},
 	}
 	func _ready() -> void:
-		custom_minimum_size = Vector2(0, 48)
+		custom_minimum_size = Vector2(0, 64)
 	func _draw() -> void:
 		var tc: Dictionary = _TIER.get(tone, _TIER[3])
 		var h := size.y
@@ -1288,7 +1306,7 @@ class _TargetRow extends Control:
 		if full:
 			_outline_pill(Rect2(Vector2.ZERO, size), Color(tc.glow.r, tc.glow.g, tc.glow.b, 0.3), 12.0, 1.5)
 		var br := 15.0
-		var bp := Vector2(26, h * 0.5)
+		var bp := Vector2(26, 24)
 		draw_circle(bp, br + 4, Color(tc.top.r, tc.top.g, tc.top.b, 0.18))
 		_gradient_circle(bp, br, tc.top, tc.bot)
 		draw_arc(bp, br, 0, TAU, 24, tc.glow, 1.5, true)
@@ -1299,20 +1317,30 @@ class _TargetRow extends Control:
 		var na := _FONT.get_ascent(nfs)
 		var nd := _FONT.get_descent(nfs)
 		draw_string(_FONT, bp + Vector2(-nw.x * 0.5, (na - nd) * 0.5), ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color.WHITE)
-		var sp := 22.0
-		var sr := 10.0
 		var pg := "%d/%d" % [done, total]
 		var pfs := 14
 		var pw := _FONT.get_string_size(pg, HORIZONTAL_ALIGNMENT_RIGHT, -1, pfs)
-		var pip_start := maxf(150.0, size.x - pw.x - 42.0 - float(maxi(total - 1, 0)) * sp)
-		var title_width := maxf(40.0, pip_start - 66.0)
+		var pa := _FONT.get_ascent(pfs)
+		var pd := _FONT.get_descent(pfs)
+		var pc: Color = tc.glow if full else Color(1, 1, 1, 0.4)
+		draw_string(_FONT, Vector2(size.x - pw.x - 14, 25 + (pa - pd) * 0.5), pg, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, pc)
 		var tfs := 13
 		var ta := _FONT.get_ascent(tfs)
 		var td := _FONT.get_descent(tfs)
 		var title_color := Color(1, 1, 1, 0.92) if full else Color(1, 1, 1, 0.72)
-		draw_string(_FONT, Vector2(58, h * 0.5 + (ta - td) * 0.5), title, HORIZONTAL_ALIGNMENT_LEFT, title_width, tfs, title_color)
+		var title_width := maxf(44.0, size.x - 58.0 - pw.x - 28.0)
+		draw_string(_FONT, Vector2(58, 25 + (ta - td) * 0.5), title, HORIZONTAL_ALIGNMENT_LEFT, title_width, tfs, title_color)
+		var sr := 10.0
+		var available_left := 58.0
+		var available_width := maxf(40.0, size.x - available_left - 14.0)
+		var sp := 22.0
+		if total > 1:
+			sp = minf(22.0, maxf(14.0, (available_width - sr * 2.0) / float(total - 1)))
+		var pip_width := sr * 2.0 + float(maxi(total - 1, 0)) * sp
+		var pip_start := available_left + maxf(0.0, (available_width - pip_width) * 0.5) + sr
+		var pip_y := h - 16.0
 		for i in total:
-			var c := Vector2(pip_start + float(i) * sp, h * 0.5)
+			var c := Vector2(pip_start + float(i) * sp, pip_y)
 			var pts := _star_pts(c, sr)
 			if i < done:
 				draw_circle(c, sr + 3, Color(tc.glow.r, tc.glow.g, tc.glow.b, 0.25))
@@ -1325,10 +1353,6 @@ class _TargetRow extends Control:
 				var ol := pts.duplicate()
 				ol.append(pts[0])
 				draw_polyline(ol, Color(1, 1, 1, 0.18), 1.5, true)
-		var pa := _FONT.get_ascent(pfs)
-		var pd := _FONT.get_descent(pfs)
-		var pc: Color = tc.glow if full else Color(1, 1, 1, 0.4)
-		draw_string(_FONT, Vector2(size.x - pw.x - 14, h * 0.5 + (pa - pd) * 0.5), pg, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, pc)
 	func _star_pts(center: Vector2, r: float) -> PackedVector2Array:
 		var pts := PackedVector2Array()
 		var ir := r * 0.42
