@@ -43,6 +43,8 @@ const MIN_WORD_LEN := 3
 const MAX_WAVE := 40                      # GDD hard ceiling
 const BONUS_LONG_MULT := 1.5              # >target length → base × 1.5
 const TARGETS_PER_WAVE := 4
+const START_HINTS := 3
+const BONUS_WORDS_PER_HINT := 10
 const ANCHOR_POOL_LENGTHS := [8, 9, 10, 11, 12]
 const MAX_DICTIONARY_POOL_ATTEMPTS := 160
 const TARGET_FIRST_LETTERS := ["G", "H", "B", "R", "E", "T", "N"]
@@ -138,6 +140,7 @@ var _row1_stack: Control             # host that the grid is scaled + centered i
 var _submit_glow: Panel              # glowing shadow ring on Submit when chain is ready
 var _score_chip: Control             # captured for confetti targeting
 var _wave_chip: Control
+var _hint_btn: Button
 var _row2_pill: PanelContainer
 var _words_count_lbl: Label
 var _mascot: Control
@@ -152,6 +155,8 @@ var _row1_tiles: Array = []          # all 10-12 tiles in Row 1; their state tel
 var _row2_chain: Array = []          # ordered subset currently in Row 2
 var _targets: Array = []             # [{"id":String,"kind":String,"label":String,"count":N,"done":k}, ...]
 var _bonus_words: Array = []
+var _hints: int = START_HINTS
+var _bonus_hint_progress: int = 0
 var _used_words: Dictionary = {}
 var _running: bool = false
 var _submit_ready_announced: bool = false
@@ -266,11 +271,21 @@ func _apply_design() -> void:
 	actions_row.add_child(words_box)
 	actions_row.move_child(words_box, 0)
 
+	_hint_btn = Button.new()
+	_hint_btn.focus_mode = Control.FOCUS_NONE
+	_hint_btn.custom_minimum_size = Vector2(96, 52)
+	_hint_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_hint_btn.pressed.connect(_use_hint)
+	_dungeon_btn(_hint_btn, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
+	actions_row.add_child(_hint_btn)
+	actions_row.move_child(_hint_btn, 1)
+
 	# Submit button — dark green.
 	_dungeon_btn(submit_btn, Color(0.08, 0.12, 0.08), Color(0.35, 0.7, 0.4, 0.25), Color(1, 1, 1, 0.2))
 	submit_btn.text = "Submit"
 	_submit_glow = null
 	submit_btn.disabled = true
+	_refresh_hint_button()
 
 func _build_header_avatar(hdr_back: Button) -> void:
 	_mascot = PanelContainer.new()
@@ -929,6 +944,7 @@ func _submit_word() -> void:
 
 	if not matched_target:
 		_bonus_words.append(word_up)
+		_add_bonus_hint_progress()
 
 	# ----- WIN FX (capture positions before tiles snap back) -----
 	var froms: Array = []
@@ -951,6 +967,7 @@ func _submit_word() -> void:
 	_refresh_targets_box()
 	_refresh_hud()
 	_refresh_bonus()
+	_refresh_hint_button()
 
 	_save_session()
 	if _targets_complete():
@@ -1042,6 +1059,65 @@ func _max_target_length() -> int:
 			m = maxi(m, int(t.get("value", 0)))
 	return m
 
+# ---------------- hints ----------------
+
+func _add_bonus_hint_progress() -> void:
+	_bonus_hint_progress += 1
+	while _bonus_hint_progress >= BONUS_WORDS_PER_HINT:
+		_bonus_hint_progress -= BONUS_WORDS_PER_HINT
+		_hints += 1
+		Fx.banner(self, "+1 HINT", VIBRANT_BLUE, Color.WHITE)
+		_mascot_react("Hint!")
+		_haptic(38, 0.42)
+
+func _use_hint() -> void:
+	if not _running:
+		return
+	if _hints <= 0:
+		_set_status("No hints — find %d bonus words for +1 hint." % (BONUS_WORDS_PER_HINT - _bonus_hint_progress))
+		_invalid_shake()
+		return
+	var hint_word := _pick_hint_word()
+	if hint_word.is_empty():
+		_set_status("No hint available for this wave.")
+		_invalid_shake()
+		return
+	_hints -= 1
+	_refresh_hint_button()
+	_set_status("Hint: try %s" % hint_word.to_upper())
+	Fx.banner(self, "HINT", VIBRANT_BLUE, Color.WHITE)
+	_mascot_react("Try it!")
+	_haptic(28, 0.32)
+	_save_session()
+
+func _pick_hint_word() -> String:
+	var words: Array[String] = Words.words_from_letters(_pool_letters, MIN_WORD_LEN, false)
+	words.shuffle()
+	for t: Dictionary in _targets:
+		if int(t.get("done", 0)) >= int(t.get("count", 1)):
+			continue
+		for w: String in words:
+			if _used_words.has(w):
+				continue
+			if _target_def_matches_word(t, w.to_upper()):
+				return w
+	for w: String in words:
+		if not _used_words.has(w):
+			return w
+	return ""
+
+func _refresh_hint_button() -> void:
+	if _hint_btn == null:
+		return
+	_hint_btn.text = "Hint %d\n%d/%d" % [_hints, _bonus_hint_progress, BONUS_WORDS_PER_HINT]
+	_hint_btn.disabled = _hints <= 0
+	if _hints > 0:
+		_dungeon_btn(_hint_btn, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
+	else:
+		_dungeon_btn(_hint_btn, Color(0.08, 0.10, 0.14), Color(0.28, 0.36, 0.5, 0.35), Color(1, 1, 1, 0.28))
+	_hint_btn.custom_minimum_size = Vector2(96, 58)
+	_hint_btn.add_theme_font_size_override("font_size", 13)
+
 # ---------------- HUD ----------------
 
 func _refresh_hud() -> void:
@@ -1050,9 +1126,9 @@ func _refresh_hud() -> void:
 
 func _refresh_bonus() -> void:
 	if _bonus_words.is_empty():
-		bonus_lbl.text = "Bonus words: —"
+		bonus_lbl.text = "Bonus words: —  |  Next hint: %d/%d" % [_bonus_hint_progress, BONUS_WORDS_PER_HINT]
 	else:
-		bonus_lbl.text = "Bonus: " + ", ".join(_bonus_words)
+		bonus_lbl.text = "Bonus: %s  |  Next hint: %d/%d" % [", ".join(_bonus_words), _bonus_hint_progress, BONUS_WORDS_PER_HINT]
 
 func _set_status(s: String) -> void:
 	status_lbl.text = s
@@ -1070,6 +1146,8 @@ func _save_session() -> void:
 		"targets": _targets.duplicate(true),
 		"used_words": used_list,
 		"bonus_words": _bonus_words.duplicate(),
+		"hints": _hints,
+		"bonus_hint_progress": _bonus_hint_progress,
 		"total_words": _total_words,
 	}
 	GameState.save()
@@ -1109,6 +1187,8 @@ func _load_session() -> bool:
 	_bonus_words.clear()
 	for w: Variant in s.get("bonus_words", []):
 		_bonus_words.append(w as String)
+	_hints = int(s.get("hints", START_HINTS))
+	_bonus_hint_progress = int(s.get("bonus_hint_progress", 0))
 	_total_words = int(s.get("total_words", 0))
 	_running = true
 	_row2_chain.clear()
@@ -1116,6 +1196,7 @@ func _load_session() -> bool:
 	_build_row2()
 	_build_targets_box()
 	_refresh_bonus()
+	_refresh_hint_button()
 	_refresh_hud()
 	if _words_count_lbl != null:
 		_words_count_lbl.text = str(_total_words)

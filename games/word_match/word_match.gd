@@ -1538,6 +1538,7 @@ func _end_round(reason: String = "Game Over") -> void:
 			break
 		if not _found.has(w):
 			missed_top.append(w.to_upper())
+	var high_score_info := GameState.record_word_match_score(_score)
 	GameState.wm_session = {
 		"pool": _pool,
 		"found_words": _found_order.duplicate(),
@@ -1549,6 +1550,9 @@ func _end_round(reason: String = "Game Over") -> void:
 		"best_combo": _best_combo,
 		"secret_words": _secret_found.duplicate(),
 		"stars": stars,
+		"high_score": int(high_score_info.get("high_score", _score)),
+		"previous_high_score": int(high_score_info.get("previous_high_score", 0)),
+		"is_new_high_score": bool(high_score_info.get("is_new_high_score", false)),
 		"reason": reason,
 	}
 	# Brief pause so the player sees the "Time!" message before transitioning.

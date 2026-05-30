@@ -10,6 +10,7 @@ var player_avatar: String = "butterfly"   # id under res://assets/avatars/<id>.s
 var total_xp: int = 0
 var per_game_xp: Dictionary = {}  # game_id -> int
 var sound_on: bool = true
+var wm_high_score: int = 0
 
 # --- Word Fight meta-progression (persisted) ---
 var lex_level: int = 1
@@ -59,6 +60,19 @@ func add_xp(game_id: String, base_amount: int) -> int:
 	score_added.emit(game_id, amt)
 	save()
 	return amt
+
+func record_word_match_score(score: int) -> Dictionary:
+	var previous := wm_high_score
+	var clean_score := maxi(0, score)
+	var is_new := clean_score > wm_high_score
+	if is_new:
+		wm_high_score = clean_score
+		save()
+	return {
+		"previous_high_score": previous,
+		"high_score": wm_high_score,
+		"is_new_high_score": is_new,
+	}
 
 # --- Word Fight meta-progression helpers ---
 
@@ -117,6 +131,7 @@ func save() -> void:
 		"wf_world_idx": wf_world_idx,
 		"wf_world_progress": wf_world_progress,
 		"sound_on": sound_on,
+		"wm_high_score": wm_high_score,
 		"wfound_save": wfound_save,
 	}
 	f.store_string(JSON.stringify(data))
@@ -140,6 +155,7 @@ func load_save() -> void:
 	owned_items = parsed.get("owned_items", [])
 	equipped_items = parsed.get("equipped_items", [])
 	wf_world_idx = int(parsed.get("wf_world_idx", 0))
+	wm_high_score = int(parsed.get("wm_high_score", 0))
 	# JSON numbers round-trip as floats — coerce the progress array back to ints.
 	var prog: Variant = parsed.get("wf_world_progress", [0, 0, 0, 0])
 	if prog is Array and (prog as Array).size() == 4:

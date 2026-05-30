@@ -45,6 +45,8 @@ func _build_ui(s: Dictionary) -> void:
 	var found_words: Array = s.get("found_words", [])
 	var possible: int = int(s.get("possible_count", 0))
 	var score: int = int(s.get("score", 0))
+	var high_score: int = int(s.get("high_score", score))
+	var is_new_high_score: bool = bool(s.get("is_new_high_score", false))
 	var best_combo: int = int(s.get("best_combo", 0))
 	var secret_words: Array = s.get("secret_words", [])
 
@@ -52,16 +54,20 @@ func _build_ui(s: Dictionary) -> void:
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	stats.add_theme_constant_override("separation", 32)
 	stats.add_child(UI.stat_box("Score", str(score), Palette.BLUE_DARK))
+	stats.add_child(UI.stat_box("Best", str(high_score), Palette.GOLD_DARK if is_new_high_score else Palette.BLUE_DARK))
 	stats.add_child(UI.stat_box("Words Found", str(found_words.size()), Palette.SAGE_DARK))
-	stats.add_child(UI.stat_box("Best Combo", "x%d" % maxi(1, best_combo), Palette.PINK_DARK))
 	body.add_child(stats)
 
 	var run_stats := HBoxContainer.new()
 	run_stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	run_stats.add_theme_constant_override("separation", 32)
+	run_stats.add_child(UI.stat_box("Best Combo", "x%d" % maxi(1, best_combo), Palette.PINK_DARK))
 	run_stats.add_child(UI.stat_box("Secrets", str(secret_words.size()), Palette.TERRACOTTA))
 	run_stats.add_child(UI.stat_box("Sets", str(int(s.get("sets", 1))), Palette.GOLD_DARK))
 	body.add_child(run_stats)
+
+	if is_new_high_score:
+		body.add_child(UI.center_label("New high score", 18, Palette.GOLD_DARK))
 
 	# Pool (small hint of the round)
 	var pool := str(s.get("pool", ""))
