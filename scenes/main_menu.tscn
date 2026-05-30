@@ -1,8 +1,6 @@
-[gd_scene load_steps=4 format=3 uid="uid://bmainmenu1"]
+[gd_scene load_steps=2 format=3 uid="uid://bmainmenu1"]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/masteries_button.gd" id="2"]
-[ext_resource type="PackedScene" uid="uid://b0modebadge1" path="res://scenes/mode_badge.tscn" id="3"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -41,10 +39,6 @@ size_flags_vertical = 4
 layout_mode = 2
 text = "0 XP"
 
-[node name="ModeBadge" parent="V" instance=ExtResource("3")]
-layout_mode = 2
-size_flags_horizontal = 0
-
 [node name="Title" type="Label" parent="V"]
 layout_mode = 2
 text = "Choose a game"
@@ -60,8 +54,3 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
-
-[node name="ChangeModeBtn" type="Button" parent="V"]
-layout_mode = 2
-text = "Change mode"
-script = ExtResource("2")

@@ -219,7 +219,7 @@ func _try_continue() -> void:
 	GameState.player_name = n
 	GameState.player_avatar = AVATARS[_avatar_idx]
 	GameState.save()
-	get_tree().change_scene_to_file("res://scenes/mode_select.tscn")
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 # ---------------- Web HTML <input> overlay ----------------
 

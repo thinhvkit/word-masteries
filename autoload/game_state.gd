@@ -1,16 +1,12 @@
 extends Node
-## Global session state — player name, difficulty mode, score totals.
+## Global session state — player name, avatar, score totals.
 
-signal mode_changed(mode: String)
 signal score_added(game: String, amount: int)
-
-enum Mode { INTERMEDIATE, ADVANCED }
 
 const SAVE_PATH := "user://masteries.save"
 
 var player_name: String = ""
 var player_avatar: String = "butterfly"   # id under res://assets/avatars/<id>.svg
-var mode: int = Mode.INTERMEDIATE
 var total_xp: int = 0
 var per_game_xp: Dictionary = {}  # game_id -> int
 var sound_on: bool = true
@@ -56,20 +52,8 @@ var wm_session: Dictionary = {
 	"time_used": 0.0,
 }
 
-func mode_name() -> String:
-	return "Intermediate" if mode == Mode.INTERMEDIATE else "Advanced"
-
-func mode_multiplier() -> float:
-	# GDD scoring: Easy ×1.0 | Hard ×2.0
-	return 1.0 if mode == Mode.INTERMEDIATE else 2.0
-
-func set_mode(m: int) -> void:
-	mode = m
-	mode_changed.emit(mode_name())
-	save()
-
 func add_xp(game_id: String, base_amount: int) -> int:
-	var amt := int(round(base_amount * mode_multiplier()))
+	var amt := maxi(0, base_amount)
 	total_xp += amt
 	per_game_xp[game_id] = per_game_xp.get(game_id, 0) + amt
 	score_added.emit(game_id, amt)
@@ -123,7 +107,6 @@ func save() -> void:
 	var data := {
 		"player_name": player_name,
 		"player_avatar": player_avatar,
-		"mode": mode,
 		"total_xp": total_xp,
 		"per_game_xp": per_game_xp,
 		"lex_level": lex_level,
@@ -149,7 +132,6 @@ func load_save() -> void:
 		return
 	player_name = parsed.get("player_name", "")
 	player_avatar = parsed.get("player_avatar", "butterfly")
-	mode = parsed.get("mode", Mode.INTERMEDIATE)
 	total_xp = parsed.get("total_xp", 0)
 	per_game_xp = parsed.get("per_game_xp", {})
 	lex_level = maxi(1, int(parsed.get("lex_level", 1)))

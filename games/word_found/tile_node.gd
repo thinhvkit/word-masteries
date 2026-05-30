@@ -4,8 +4,7 @@ extends Button
 ## - AVAILABLE: bright candy gradient circle per letter tier.
 ## - MOVED:     golden selected candy, selection order badge.
 
-const Fx := preload("res://games/word_fight/fx.gd")
-const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
+const TILE_FONT: Font = preload("res://assets/fonts/Baloo2-ExtraBold.ttf")
 
 signal tile_pressed(tile: WFoundTile)
 signal tile_picked_fx(tile: WFoundTile, color: Color)
@@ -14,12 +13,8 @@ enum State { AVAILABLE, MOVED }
 
 const SIZE := 87.0
 
-const _CANDY_TIERS := [
-	{"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FF9DB5"), "ink": Color.WHITE},
-	{"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#8DD6FF"), "ink": Color.WHITE},
-	{"top": Color("#B07AFF"), "bot": Color("#7030D4"), "outline": Color("#D0ACFF"), "ink": Color.WHITE},
-	{"top": Color("#7AE86A"), "bot": Color("#30A830"), "outline": Color("#A8F49E"), "ink": Color.WHITE},
-]
+const _CANDY_VOWEL := {"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FFB0C2"), "ink": Color.WHITE}
+const _CANDY_CONSONANT := {"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#A6E0FF"), "ink": Color.WHITE}
 
 const _CANDY_MOVED := {
 	"top": Color("#FFD740"), "bot": Color("#FFB300"), "outline": Color("#FFE57F"), "ink": Color.WHITE,
@@ -75,8 +70,10 @@ func _handle_state_change(prev: int, now: int) -> void:
 		tw.tween_property(self, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _candy_for_letter() -> Dictionary:
-	var tier := Fx.tier_for_letter(letter)
-	return _CANDY_TIERS[clampi(tier, 0, _CANDY_TIERS.size() - 1)]
+	return _CANDY_VOWEL if _is_vowel(letter) else _CANDY_CONSONANT
+
+func _is_vowel(ch: String) -> bool:
+	return "AEIOU".find(ch) != -1
 
 func _draw() -> void:
 	var center := size * 0.5
@@ -115,13 +112,17 @@ func _draw() -> void:
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 42
+	var fs := 50
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
-	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
+	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5 + 1.0)
+	draw_string(f, base + Vector2(0, 4), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.52))
+	draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.28))
+	for o in [Vector2(-0.8, 0), Vector2(0.8, 0), Vector2(0, -0.6), Vector2(0, 0.6)]:
+		draw_string(f, base + o, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, candy.ink)
 	draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, candy.ink)
+	_draw_letter_cues(center, letter, candy.ink)
 
 	# Selection order badge (top-right).
 	if state == State.MOVED and selection_index >= 0:
@@ -133,6 +134,16 @@ func _draw() -> void:
 		var nfs := 10
 		var nts := f.get_string_size(num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs)
 		draw_string(f, badge_pos + Vector2(-nts.x * 0.5, f.get_ascent(nfs) * 0.5 - 1), num_str, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color.WHITE)
+
+func _draw_letter_cues(center: Vector2, shown: String, col: Color) -> void:
+	if shown == "I":
+		var cue_shadow := Color(0, 0, 0, 0.22)
+		draw_line(center + Vector2(-11, -18), center + Vector2(11, -18), cue_shadow, 5.0, true)
+		draw_line(center + Vector2(-11, 18), center + Vector2(11, 18), cue_shadow, 5.0, true)
+		draw_line(center + Vector2(-10, -19), center + Vector2(10, -19), col, 3.0, true)
+		draw_line(center + Vector2(-10, 17), center + Vector2(10, 17), col, 3.0, true)
+	elif shown == "D":
+		draw_line(center + Vector2(-12, -19), center + Vector2(-12, 19), Color(0, 0, 0, 0.20), 3.0, true)
 
 func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) -> void:
 	var bands := 20

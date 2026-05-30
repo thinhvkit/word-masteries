@@ -4,24 +4,15 @@ extends Control
 ## Idle: bright candy gradient, glossy sheen, thick colored outline.
 ## Selected: deeper saturated candy, white glyph, scale 1.12, glow ring.
 
-const Fx := preload("res://games/word_fight/fx.gd")
-const LETTER_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
+const LETTER_FONT: Font = preload("res://assets/fonts/Baloo2-ExtraBold.ttf")
 
 signal letter_selected_fx(letter: WMLetter, color: Color)
 
 const SIZE := 87.0
 enum TileKind { REGULAR, FIRE, GOLD, DIAMOND, POISON, WILD }
 
-const _CANDY_TIERS := [
-	# Vowels — cherry red
-	{"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FF9DB5"), "ink": Color.WHITE},
-	# Common — ocean blue
-	{"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#8DD6FF"), "ink": Color.WHITE},
-	# Uncommon — grape purple
-	{"top": Color("#B07AFF"), "bot": Color("#7030D4"), "outline": Color("#D0ACFF"), "ink": Color.WHITE},
-	# Rare — lime green
-	{"top": Color("#7AE86A"), "bot": Color("#30A830"), "outline": Color("#A8F49E"), "ink": Color.WHITE},
-]
+const _CANDY_VOWEL := {"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FFB0C2"), "ink": Color.WHITE}
+const _CANDY_CONSONANT := {"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#A6E0FF"), "ink": Color.WHITE}
 
 const _CANDY_SELECT := {
 	"top": Color("#FFD740"), "bot": Color("#FFB300"), "outline": Color("#FFE57F"), "ink": Color.WHITE,
@@ -84,8 +75,10 @@ func _animate_select() -> void:
 func _candy_for_letter() -> Dictionary:
 	if tile_kind != TileKind.REGULAR and _SPECIAL_CANDY.has(tile_kind):
 		return _SPECIAL_CANDY[tile_kind]
-	var tier := Fx.tier_for_letter(letter)
-	return _CANDY_TIERS[clampi(tier, 0, _CANDY_TIERS.size() - 1)]
+	return _CANDY_VOWEL if _is_vowel(letter) else _CANDY_CONSONANT
+
+func _is_vowel(ch: String) -> bool:
+	return "AEIOU".find(ch) != -1
 
 func _draw() -> void:
 	var center := size * 0.5
@@ -146,14 +139,28 @@ func _draw_gradient_circle(center: Vector2, r: float, top: Color, bot: Color) ->
 
 func _draw_letter(center: Vector2, col: Color) -> void:
 	var f: Font = LETTER_FONT
-	var fs := 42
+	var fs := 50
 	var shown := "*" if tile_kind == TileKind.WILD else ("?" if tile_kind == TileKind.POISON else letter)
 	var ts := f.get_string_size(shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)
-	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5)
-	draw_string(f, base + Vector2(1, 2), shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.4))
+	var base := Vector2(center.x - ts.x * 0.5, center.y + (ascent - descent) * 0.5 + 1.0)
+	draw_string(f, base + Vector2(0, 4), shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.52))
+	draw_string(f, base + Vector2(1, 2), shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.28))
+	for o in [Vector2(-0.8, 0), Vector2(0.8, 0), Vector2(0, -0.6), Vector2(0, 0.6)]:
+		draw_string(f, base + o, shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
 	draw_string(f, base, shown, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, col)
+	_draw_letter_cues(center, shown, col)
+
+func _draw_letter_cues(center: Vector2, shown: String, col: Color) -> void:
+	if shown == "I":
+		var cue_shadow := Color(0, 0, 0, 0.22)
+		draw_line(center + Vector2(-11, -18), center + Vector2(11, -18), cue_shadow, 5.0, true)
+		draw_line(center + Vector2(-11, 18), center + Vector2(11, 18), cue_shadow, 5.0, true)
+		draw_line(center + Vector2(-10, -19), center + Vector2(10, -19), col, 3.0, true)
+		draw_line(center + Vector2(-10, 17), center + Vector2(10, 17), col, 3.0, true)
+	elif shown == "D":
+		draw_line(center + Vector2(-12, -19), center + Vector2(-12, 19), Color(0, 0, 0, 0.20), 3.0, true)
 
 func _draw_special_mark(center: Vector2, r: float, candy: Dictionary) -> void:
 	var mark := str(candy.get("mark", ""))
@@ -163,7 +170,7 @@ func _draw_special_mark(center: Vector2, r: float, candy: Dictionary) -> void:
 	draw_circle(badge_pos, 12, Color(0, 0, 0, 0.28))
 	draw_circle(badge_pos, 10, Color(candy.outline.r, candy.outline.g, candy.outline.b, 0.95))
 	var f: Font = LETTER_FONT
-	var fs := 13
+	var fs := 14
 	var ts := f.get_string_size(mark, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var base := Vector2(badge_pos.x - ts.x * 0.5, badge_pos.y + (f.get_ascent(fs) - f.get_descent(fs)) * 0.5)
 	draw_string(f, base, mark, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0.12, 0.08, 0.16))
