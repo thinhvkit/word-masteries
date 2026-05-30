@@ -868,12 +868,11 @@ func _update_submit_state() -> void:
 	var valid := len_ok and Words.is_valid(word.to_lower()) and not _used_words.has(word.to_lower())
 	submit_btn.disabled = not valid
 	if valid:
-		_dungeon_btn(submit_btn, Color("#1a5a2a"), Color("#3a8a4a"), Color.WHITE)
+		_dungeon_btn(submit_btn, READY_GREEN, Color("#159447"), Color.WHITE)
 		if not _submit_ready_announced:
 			_submit_ready_announced = true
 			Audio.play("wm_ready", 0.01, 1.0, -2.0)
 			_haptic(20, 0.28)
-			_flash_row2_pill(READY_GREEN)
 	else:
 		_submit_ready_announced = false
 		_dungeon_btn(submit_btn, Color(0.08, 0.12, 0.08), Color(0.35, 0.7, 0.4, 0.25), Color(1, 1, 1, 0.2))
