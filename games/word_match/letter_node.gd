@@ -4,12 +4,18 @@ extends Control
 ## Idle: bright candy gradient, glossy sheen, thick colored outline.
 ## Selected: deeper saturated candy, white glyph, scale 1.12, glow ring.
 
-const LETTER_FONT: Font = preload("res://assets/fonts/Baloo2-ExtraBold.ttf")
+static var LETTER_FONT: Font = _make_letter_font()
 
 signal letter_selected_fx(letter: WMLetter, color: Color)
 
 const SIZE := 87.0
 enum TileKind { REGULAR, FIRE, GOLD, DIAMOND, POISON, WILD }
+
+static func _make_letter_font() -> Font:
+	var font := SystemFont.new()
+	font.font_names = PackedStringArray(["Comic Sans MS", "Comic Sans"])
+	font.font_weight = 700
+	return font
 
 const _CANDY_VOWEL := {"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FFB0C2"), "ink": Color.WHITE}
 const _CANDY_CONSONANT := {"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#A6E0FF"), "ink": Color.WHITE}

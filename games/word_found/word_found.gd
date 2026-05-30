@@ -49,6 +49,8 @@ const ANCHOR_POOL_LENGTHS := [8, 9, 10, 11, 12]
 const MAX_DICTIONARY_POOL_ATTEMPTS := 160
 const TARGET_FIRST_LETTERS := ["G", "H", "B", "R", "E", "T", "N"]
 const TARGET_END_LETTERS := ["N", "R", "T"]
+const COMPACT_VIEWPORT_W := 430.0
+const COMPACT_VIEWPORT_H := 900.0
 
 const ANIMAL_WORDS := {
 	"ant": true, "ape": true, "bat": true, "bear": true, "bee": true, "bird": true,
@@ -176,6 +178,13 @@ func _ready() -> void:
 	if not _load_session():
 		_start_wave(1)
 
+func _is_compact_layout() -> bool:
+	var vp := get_viewport_rect().size
+	return vp.x <= COMPACT_VIEWPORT_W or vp.y <= COMPACT_VIEWPORT_H
+
+func _compact_control_height() -> float:
+	return 44.0 if _is_compact_layout() else 52.0
+
 func _apply_design() -> void:
 	Chrome.bg_layer(self)
 	var hdr_back := Chrome.header(self, "Word Found")
@@ -186,12 +195,16 @@ func _apply_design() -> void:
 	)
 
 	var v := $V as Control
-	v.offset_top = Chrome.HEADER_H + 24
+	v.offset_top = Chrome.HEADER_H + (18 if _is_compact_layout() else 24)
+	v.offset_left = 4 if _is_compact_layout() else 6
+	v.offset_right = -4 if _is_compact_layout() else -6
+	v.offset_bottom = -6 if _is_compact_layout() else -10
+	v.add_theme_constant_override("separation", 5 if _is_compact_layout() else 8)
 
 	# HUD row — vibrant chip pills.
-	wave_lbl.add_theme_font_size_override("font_size", 20)
+	wave_lbl.add_theme_font_size_override("font_size", 18 if _is_compact_layout() else 20)
 	wave_lbl.add_theme_color_override("font_color", Color.WHITE)
-	score_lbl.add_theme_font_size_override("font_size", 20)
+	score_lbl.add_theme_font_size_override("font_size", 18 if _is_compact_layout() else 20)
 	score_lbl.add_theme_color_override("font_color", Color("#4a3000"))
 	_wave_chip = _wrap_in_vibrant_chip(wave_lbl, VIBRANT_BLUE, VIBRANT_BLUE_DARK)
 	_score_chip = _wrap_in_vibrant_chip(score_lbl, VIBRANT_GOLD, Color("#dba830"))
@@ -200,7 +213,7 @@ func _apply_design() -> void:
 	var targets_label_node: Label = $V/TargetsLabel
 	targets_label_node.text = "Targets"
 	targets_label_node.add_theme_color_override("font_color", Color("#ffe680"))
-	targets_label_node.add_theme_font_size_override("font_size", 16)
+	targets_label_node.add_theme_font_size_override("font_size", 14 if _is_compact_layout() else 16)
 	_wrap_in_dark_card([targets_label_node, targets_box], v)
 
 	# Row2: Word Match-style current-word pill.
@@ -217,12 +230,12 @@ func _apply_design() -> void:
 	pill_sb.shadow_color = Color(1.0, 0.4, 0.7, 0.38)
 	pill_sb.shadow_size = 6
 	pill_sb.shadow_offset = Vector2i(0, 2)
-	pill_sb.content_margin_left = 20
-	pill_sb.content_margin_right = 20
-	pill_sb.content_margin_top = 10
-	pill_sb.content_margin_bottom = 10
+	pill_sb.content_margin_left = 16 if _is_compact_layout() else 20
+	pill_sb.content_margin_right = 16 if _is_compact_layout() else 20
+	pill_sb.content_margin_top = 7 if _is_compact_layout() else 10
+	pill_sb.content_margin_bottom = 7 if _is_compact_layout() else 10
 	_row2_pill.add_theme_stylebox_override("panel", pill_sb)
-	_row2_pill.custom_minimum_size = Vector2(0, 60)
+	_row2_pill.custom_minimum_size = Vector2(0, 46 if _is_compact_layout() else 60)
 	v.add_child(_row2_pill)
 	v.move_child(_row2_pill, row2_node.get_index())
 	row2_node.reparent(_row2_pill, false)
@@ -237,16 +250,17 @@ func _apply_design() -> void:
 	# Status/feedback — subtle text below the word pill.
 	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
-	status_lbl.add_theme_font_size_override("font_size", 14)
+	status_lbl.add_theme_font_size_override("font_size", 12 if _is_compact_layout() else 14)
 	bonus_lbl.add_theme_color_override("font_color", Color("#fff0b0"))
 	bonus_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
 	bonus_lbl.add_theme_constant_override("outline_size", 3)
-	bonus_lbl.add_theme_font_size_override("font_size", 17)
+	bonus_lbl.add_theme_font_size_override("font_size", 14 if _is_compact_layout() else 17)
 
 	# Bottom: WORDS counter + Submit button.
 	clear_btn.get_parent().remove_child(clear_btn)
 	clear_btn.queue_free()
 	var actions_row := submit_btn.get_parent() as HBoxContainer
+	actions_row.add_theme_constant_override("separation", 6 if _is_compact_layout() else 12)
 
 	# WORDS counter box.
 	var words_box := PanelContainer.new()
@@ -260,20 +274,20 @@ func _apply_design() -> void:
 	wb_sb.content_margin_top = 6
 	wb_sb.content_margin_bottom = 6
 	words_box.add_theme_stylebox_override("panel", wb_sb)
-	words_box.custom_minimum_size = Vector2(72, 52)
+	words_box.custom_minimum_size = Vector2(64, _compact_control_height())
 	var wb_col := VBoxContainer.new()
 	wb_col.alignment = BoxContainer.ALIGNMENT_CENTER
 	wb_col.add_theme_constant_override("separation", 1)
 	words_box.add_child(wb_col)
 	var wb_head := Label.new()
 	wb_head.text = "WORDS"
-	wb_head.add_theme_font_size_override("font_size", 9)
+	wb_head.add_theme_font_size_override("font_size", 8 if _is_compact_layout() else 9)
 	wb_head.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
 	wb_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	wb_col.add_child(wb_head)
 	_words_count_lbl = Label.new()
 	_words_count_lbl.text = "0"
-	_words_count_lbl.add_theme_font_size_override("font_size", 22)
+	_words_count_lbl.add_theme_font_size_override("font_size", 19 if _is_compact_layout() else 22)
 	_words_count_lbl.add_theme_color_override("font_color", Color.WHITE)
 	_words_count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	wb_col.add_child(_words_count_lbl)
@@ -282,7 +296,7 @@ func _apply_design() -> void:
 
 	_hint_btn = Button.new()
 	_hint_btn.focus_mode = Control.FOCUS_NONE
-	_hint_btn.custom_minimum_size = Vector2(96, 52)
+	_hint_btn.custom_minimum_size = Vector2(78 if _is_compact_layout() else 96, _compact_control_height())
 	_hint_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_hint_btn.pressed.connect(_use_hint)
 	_dungeon_btn(_hint_btn, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
@@ -341,10 +355,10 @@ func _build_praise_row(parent: Control, index: int) -> void:
 	sb.set_corner_radius_all(16)
 	sb.set_border_width_all(1)
 	sb.border_color = Color(1, 1, 1, 0.12)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 7
-	sb.content_margin_bottom = 7
+	sb.content_margin_left = 10 if _is_compact_layout() else 12
+	sb.content_margin_right = 10 if _is_compact_layout() else 12
+	sb.content_margin_top = 5 if _is_compact_layout() else 7
+	sb.content_margin_bottom = 5 if _is_compact_layout() else 7
 	_praise_box.add_theme_stylebox_override("panel", sb)
 	parent.add_child(_praise_box)
 	parent.move_child(_praise_box, index)
@@ -353,20 +367,20 @@ func _build_praise_row(parent: Control, index: int) -> void:
 	row.add_theme_constant_override("separation", 8)
 	_praise_box.add_child(row)
 	_praise_icon = TextureRect.new()
-	_praise_icon.custom_minimum_size = Vector2(26, 26)
+	_praise_icon.custom_minimum_size = Vector2(22, 22) if _is_compact_layout() else Vector2(26, 26)
 	_praise_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_praise_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_praise_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(_praise_icon)
 	_praise_label = Label.new()
-	_praise_label.add_theme_font_size_override("font_size", 18)
+	_praise_label.add_theme_font_size_override("font_size", 15 if _is_compact_layout() else 18)
 	_praise_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.48))
 	_praise_label.add_theme_constant_override("outline_size", 3)
 	_praise_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_praise_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_praise_label)
 	_praise_badge = Label.new()
-	_praise_badge.add_theme_font_size_override("font_size", 15)
+	_praise_badge.add_theme_font_size_override("font_size", 13 if _is_compact_layout() else 15)
 	_praise_badge.add_theme_color_override("font_color", VIBRANT_GOLD)
 	_praise_badge.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
 	_praise_badge.add_theme_constant_override("outline_size", 3)
@@ -379,10 +393,10 @@ func _wrap_in_vibrant_chip(lbl: Label, bg: Color, border: Color) -> Control:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.set_corner_radius_all(99)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	sb.content_margin_left = 10 if _is_compact_layout() else 14
+	sb.content_margin_right = 10 if _is_compact_layout() else 14
+	sb.content_margin_top = 4 if _is_compact_layout() else 6
+	sb.content_margin_bottom = 4 if _is_compact_layout() else 6
 	sb.set_border_width_all(2)
 	sb.border_color = border
 	sb.shadow_color = Color(0, 0, 0, 0.22)
@@ -407,15 +421,15 @@ func _wrap_in_dark_card(nodes: Array, parent: Control) -> void:
 	sb.shadow_color = Color(0, 0, 0, 0.25)
 	sb.shadow_size = 6
 	sb.shadow_offset = Vector2i(0, 3)
-	sb.content_margin_left = 16
-	sb.content_margin_right = 16
-	sb.content_margin_top = 12
-	sb.content_margin_bottom = 12
+	sb.content_margin_left = 10 if _is_compact_layout() else 16
+	sb.content_margin_right = 10 if _is_compact_layout() else 16
+	sb.content_margin_top = 8 if _is_compact_layout() else 12
+	sb.content_margin_bottom = 8 if _is_compact_layout() else 12
 	card.add_theme_stylebox_override("panel", sb)
 	parent.add_child(card)
 	parent.move_child(card, first_idx)
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 8)
+	inner.add_theme_constant_override("separation", 5 if _is_compact_layout() else 8)
 	card.add_child(inner)
 	for n: Node in nodes:
 		n.reparent(inner, false)
@@ -446,12 +460,14 @@ func _fit_row1() -> void:
 	var wrap_w := _row1_stack.size.x
 	if wrap_w <= 0.0:
 		wrap_w = gs.x + 24.0
-	var padded_h := gs.y + 24.0
+	var scale_factor := minf(1.0, maxf(0.66, (wrap_w - 16.0) / gs.x))
+	row1_grid.scale = Vector2.ONE * scale_factor
+	var padded_h := gs.y * scale_factor + (14.0 if _is_compact_layout() else 24.0)
 	_row1_stack.custom_minimum_size = Vector2(0, padded_h)
 	_row1_bg.position = Vector2.ZERO
 	_row1_bg.size = Vector2(wrap_w, padded_h)
-	var grid_x := (wrap_w - gs.x) * 0.5
-	row1_grid.position = Vector2(grid_x, 12)
+	var grid_x := (wrap_w - gs.x * scale_factor) * 0.5
+	row1_grid.position = Vector2(grid_x, 7 if _is_compact_layout() else 12)
 
 func _wrap_in_chip(lbl: Label, bg: Color) -> void:
 	var parent := lbl.get_parent() as Control
@@ -499,12 +515,12 @@ func _wrap_in_card(nodes: Array, parent: Control, bg: Color, border: Color, radi
 
 func _dungeon_btn(btn: Button, bg: Color, border: Color, fg: Color) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.add_theme_font_size_override("font_size", 17)
+	btn.add_theme_font_size_override("font_size", 15 if _is_compact_layout() else 17)
 	btn.add_theme_color_override("font_color", fg)
 	btn.add_theme_color_override("font_hover_color", fg)
 	btn.add_theme_color_override("font_pressed_color", fg)
 	btn.add_theme_color_override("font_disabled_color", Color(fg.r, fg.g, fg.b, 0.4))
-	btn.custom_minimum_size = Vector2(0, 52)
+	btn.custom_minimum_size = Vector2(0, _compact_control_height())
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.set_corner_radius_all(14)
@@ -513,10 +529,10 @@ func _dungeon_btn(btn: Button, bg: Color, border: Color, fg: Color) -> void:
 	sb.shadow_color = Color(0, 0, 0, 0.3)
 	sb.shadow_size = 4
 	sb.shadow_offset = Vector2i(0, 2)
-	sb.content_margin_left = 20
-	sb.content_margin_right = 20
-	sb.content_margin_top = 14
-	sb.content_margin_bottom = 14
+	sb.content_margin_left = 14 if _is_compact_layout() else 20
+	sb.content_margin_right = 14 if _is_compact_layout() else 20
+	sb.content_margin_top = 10 if _is_compact_layout() else 14
+	sb.content_margin_bottom = 10 if _is_compact_layout() else 14
 	var press := sb.duplicate() as StyleBoxFlat
 	press.bg_color = bg.darkened(0.15)
 	press.shadow_size = 1
@@ -818,7 +834,7 @@ func _build_row1() -> void:
 	for c in row1_grid.get_children():
 		c.queue_free()
 	_row1_tiles.clear()
-	row1_grid.columns = mini(_pool_letters.length(), 4)
+	row1_grid.columns = mini(_pool_letters.length(), 6 if _is_compact_layout() else 4)
 	var letters := []
 	for ch in _pool_letters:
 		letters.append(ch)
@@ -894,11 +910,11 @@ func _refresh_row2_label() -> void:
 	row2_label.visible = true
 	if word.is_empty():
 		row2_label.text = "—"
-		row2_label.add_theme_font_size_override("font_size", 28)
+		row2_label.add_theme_font_size_override("font_size", 24 if _is_compact_layout() else 28)
 		row2_label.add_theme_color_override("font_color", Color.WHITE)
 	else:
 		row2_label.text = word
-		row2_label.add_theme_font_size_override("font_size", 28)
+		row2_label.add_theme_font_size_override("font_size", 24 if _is_compact_layout() else 28)
 		row2_label.add_theme_color_override("font_color", Color.WHITE)
 	_refresh_word_feedback()
 
@@ -949,7 +965,7 @@ func _update_submit_state() -> void:
 func _build_targets_box() -> void:
 	for c in targets_box.get_children():
 		c.queue_free()
-	targets_box.add_theme_constant_override("separation", 6)
+	targets_box.add_theme_constant_override("separation", 4 if _is_compact_layout() else 6)
 	for t in _targets:
 		var row := _TargetRow.new()
 		row.badge = t.get("badge", str(t.get("value", "?"))) as String
@@ -958,6 +974,8 @@ func _build_targets_box() -> void:
 		row.done = int(t.get("done", 0))
 		row.tone = int(t.get("tone", 4))
 		targets_box.add_child(row)
+		if _is_compact_layout():
+			row.custom_minimum_size = Vector2(0, 48)
 
 func _refresh_targets_box() -> void:
 	# Re-render to reflect updated `done` counts.
@@ -1415,8 +1433,8 @@ func _refresh_hint_button() -> void:
 		_dungeon_btn(_hint_btn, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
 	else:
 		_dungeon_btn(_hint_btn, Color(0.08, 0.10, 0.14), Color(0.28, 0.36, 0.5, 0.35), Color(1, 1, 1, 0.28))
-	_hint_btn.custom_minimum_size = Vector2(96, 58)
-	_hint_btn.add_theme_font_size_override("font_size", 13)
+	_hint_btn.custom_minimum_size = Vector2(78 if _is_compact_layout() else 96, _compact_control_height())
+	_hint_btn.add_theme_font_size_override("font_size", 12 if _is_compact_layout() else 13)
 
 # ---------------- HUD ----------------
 
@@ -1425,7 +1443,9 @@ func _refresh_hud() -> void:
 	score_lbl.text = "%d XP" % _score
 
 func _refresh_bonus() -> void:
-	if _bonus_words.is_empty():
+	if _is_compact_layout():
+		bonus_lbl.text = "Bonus: %d/%d to next hint" % [_bonus_hint_progress, BONUS_WORDS_PER_HINT]
+	elif _bonus_words.is_empty():
 		bonus_lbl.text = "Bonus words: —  |  Next hint: %d/%d" % [_bonus_hint_progress, BONUS_WORDS_PER_HINT]
 	else:
 		bonus_lbl.text = "Bonus: %s  |  Next hint: %d/%d" % [", ".join(_bonus_words), _bonus_hint_progress, BONUS_WORDS_PER_HINT]

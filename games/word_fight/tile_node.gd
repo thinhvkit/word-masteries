@@ -1,22 +1,32 @@
 class_name WFTile
 extends Button
 ## Word Fight tile — vibrant board.
-## Idle: gradient fill by letter tier (vowel/common/uncommon/rare), top sheen,
-## soft drop shadow, bold ink letter.
-## Selected: hot-pink gradient + white letter + scale-up + glow ring + order chip.
+## Idle: candy gradient fill by vowel/consonant, top sheen, soft drop shadow,
+## bold ink letter, with the existing polygon tile shape preserved.
+## Selected: golden candy + white letter + scale-up + glow ring + order chip.
 ## Rainbow: animated multi-color outer ring.
 ## Dim: ghosted during enemy turn.
 ## Animations: pop-in on spawn, burst-dissolve on consume, drop-in on refill,
 ## sparkle particles on select (handled by Fx via signal).
 
 const Fx := preload("res://games/word_fight/fx.gd")
-const TILE_FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
+static var TILE_FONT: Font = _make_tile_font()
 
 signal tile_pressed(tile: WFTile)
 signal tile_selected_fx(tile: WFTile, color: Color)
 
 const SIZE := 87.0
 const RADIUS := 12.0
+
+const _CANDY_VOWEL := {"top": Color("#FF6B8A"), "bot": Color("#D4345A"), "outline": Color("#FFB0C2"), "ink": Color.WHITE}
+const _CANDY_CONSONANT := {"top": Color("#5BC0FF"), "bot": Color("#1A7FD4"), "outline": Color("#A6E0FF"), "ink": Color.WHITE}
+const _CANDY_SELECT := {"top": Color("#FFD740"), "bot": Color("#FFB300"), "outline": Color("#FFE57F"), "ink": Color.WHITE}
+
+static func _make_tile_font() -> Font:
+	var font := SystemFont.new()
+	font.font_names = PackedStringArray(["Comic Sans MS", "Comic Sans"])
+	font.font_weight = 700
+	return font
 
 ## Beneficial special tiles. Order is referenced by Fx.gem_gradient/gem_accent.
 enum Gem { NORMAL, FIRE, ICE, GOLD, POISON, DIAMOND, HEALING }
@@ -36,7 +46,7 @@ var selected_order: int = -1 :
 		if was != now:
 			_animate_select(now)
 			if now:
-				var spark := Fx.gem_accent(gem) if gem != Gem.NORMAL else Fx.SELECT_BOTTOM
+				var spark := Fx.gem_accent(gem) if gem != Gem.NORMAL else _CANDY_SELECT.outline
 				tile_selected_fx.emit(self, spark)
 		queue_redraw()
 
@@ -94,6 +104,12 @@ func reset_special() -> void:
 	fire_fuse = 0
 	burn_fuse = 0
 	lock_turns = 0
+
+func _candy_for_letter() -> Dictionary:
+	return _CANDY_VOWEL if _is_vowel(letter) else _CANDY_CONSONANT
+
+func _is_vowel(ch: String) -> bool:
+	return "AEIOU".find(ch) != -1
 
 func _update_process() -> void:
 	set_process(rainbow or hazard == Hazard.BURNING or gem != Gem.NORMAL)
@@ -170,18 +186,19 @@ func _draw() -> void:
 	# Drop shadow — octagon offset down.
 	draw_colored_polygon(_octagon(Vector2(0, 5), s, cut), Color(0.12, 0.08, 0.22, 0.30))
 
-	# --- fill colors: select overrides gem overrides letter tier ---
+	# --- fill colors: select overrides gem overrides candy letter tier ---
 	var top: Color
 	var bot: Color
 	var ink: Color
+	var outline: Color
 	if sel:
-		top = Fx.SELECT_TOP; bot = Fx.SELECT_BOTTOM; ink = Fx.SELECT_INK
+		top = _CANDY_SELECT.top; bot = _CANDY_SELECT.bot; ink = _CANDY_SELECT.ink; outline = _CANDY_SELECT.outline
 	elif is_gem:
 		var gg := Fx.gem_gradient(gem)
-		top = gg[0]; bot = gg[1]; ink = gg[2]
+		top = gg[0]; bot = gg[1]; ink = gg[2]; outline = Fx.gem_accent(gem)
 	else:
-		var lg := Fx.gradient_for_letter(letter)
-		top = lg[0]; bot = lg[1]; ink = lg[2]
+		var candy := _candy_for_letter()
+		top = candy.top; bot = candy.bot; ink = candy.ink; outline = candy.outline
 
 	# Outer bevel body.
 	draw_colored_polygon(outer, bot.darkened(0.34))
@@ -218,15 +235,17 @@ func _draw() -> void:
 	if sel:
 		_draw_poly_outline(outer, Color("#7a0e4a"), 2.6)
 		_draw_poly_outline(_octagon(Vector2(-2.5, -2.5), s + 5.0, cut),
-			Color(1.0, 0.5, 0.85, 0.6), 2.2)
+			Color(outline.r, outline.g, outline.b, 0.6), 2.2)
 	elif is_stone:
 		_draw_poly_outline(outer, Color("#2b2b30"), 2.6)
 	elif hazard == Hazard.LOCKED:
 		_draw_poly_outline(outer, Color("#3a5e88"), 2.6)
 	elif is_gem:
-		_draw_poly_outline(outer, Fx.gem_accent(gem), 2.6)
+		_draw_poly_outline(outer, outline, 2.6)
 	else:
-		_draw_poly_outline(outer, Color(0, 0, 0, 0.22), 1.6)
+		_draw_poly_outline(outer, outline, 2.4)
+		_draw_poly_outline(_octagon(Vector2(-1.5, -1.5), s + 3.0, cut),
+			Color(outline.r, outline.g, outline.b, 0.18), 1.8)
 
 	# Rainbow ring (animated hue rotation around the outline).
 	if rainbow:
@@ -239,17 +258,21 @@ func _draw() -> void:
 	# --- letter (hidden under stone) ---
 	if not is_stone:
 		var f: Font = TILE_FONT
-		var fs := int(s * 0.5)
+		var fs := int(s * 0.62)
 		var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 		var ascent := f.get_ascent(fs)
 		var descent := f.get_descent(fs)
 		var y := (size.y + ascent - descent) * 0.5
 		var letter_ink := Color(ink, 0.5) if hazard == Hazard.LOCKED else ink
-		# Drop shadow on the glyph for readability.
-		draw_string(f, Vector2(size.x * 0.5 - ts.x * 0.5 + 1, y + 1),
-			letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.35))
-		draw_string(f, Vector2(size.x * 0.5 - ts.x * 0.5, y),
-			letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, letter_ink)
+		var base := Vector2(size.x * 0.5 - ts.x * 0.5, y)
+		var stroke := Color(0.16, 0.08, 0.18, 0.58)
+		draw_string(f, base + Vector2(0, 4), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.52))
+		draw_string(f, base + Vector2(1, 2), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, Color(0, 0, 0, 0.28))
+		for o in [Vector2(-2.1, 0), Vector2(2.1, 0), Vector2(0, -2.0), Vector2(0, 2.0), Vector2(-1.5, -1.5), Vector2(1.5, -1.5), Vector2(-1.5, 1.5), Vector2(1.5, 1.5)]:
+			draw_string(f, base + o, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, stroke)
+		for o in [Vector2(-1.0, 0), Vector2(1.0, 0), Vector2(0, -0.8), Vector2(0, 0.8)]:
+			draw_string(f, base + o, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, letter_ink)
+		draw_string(f, base, letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs, letter_ink)
 
 	# --- hazard decorations ---
 	match hazard:
@@ -274,7 +297,7 @@ func _draw() -> void:
 	if sel:
 		var fchip: Font = TILE_FONT
 		var chip_pos := Vector2(size.x - 10, 10)
-		draw_circle(chip_pos, 9, Color("#7a0e4a"))
+		draw_circle(chip_pos, 9, Color("#8a5c00"))
 		draw_circle(chip_pos, 7, Color.WHITE)
 		var num := str(selected_order + 1)
 		var chip_fs := 11
@@ -282,7 +305,7 @@ func _draw() -> void:
 		var n_ascent := fchip.get_ascent(chip_fs)
 		var n_descent := fchip.get_descent(chip_fs)
 		draw_string(fchip, Vector2(chip_pos.x - ns.x * 0.5, chip_pos.y + (n_ascent - n_descent) * 0.5),
-			num, HORIZONTAL_ALIGNMENT_CENTER, -1, chip_fs, Color("#7a0e4a"))
+			num, HORIZONTAL_ALIGNMENT_CENTER, -1, chip_fs, Color("#8a5c00"))
 
 # --------- hazard / badge decorations ---------
 func _draw_badge(text: String, color: Color) -> void:
