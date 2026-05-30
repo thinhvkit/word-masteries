@@ -112,7 +112,7 @@ func _draw() -> void:
 
 	# Letter glyph.
 	var f: Font = TILE_FONT
-	var fs := 50
+	var fs := 56
 	var ts := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 	var ascent := f.get_ascent(fs)
 	var descent := f.get_descent(fs)

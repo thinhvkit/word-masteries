@@ -78,12 +78,19 @@ const ACTION_WORDS := {
 }
 const NOUN_WORDS := {
 	"air": true, "art": true, "book": true, "boy": true, "branch": true, "car": true,
-	"child": true, "city": true, "day": true, "door": true, "dream": true, "field": true,
-	"fire": true, "friend": true, "garden": true, "girl": true, "hand": true, "home": true,
-	"house": true, "idea": true, "letter": true, "light": true, "line": true, "man": true,
-	"map": true, "moon": true, "mountain": true, "name": true, "night": true, "parent": true,
-	"plant": true, "river": true, "room": true, "school": true, "song": true, "star": true,
-	"story": true, "teacher": true, "thing": true, "tree": true, "water": true, "word": true,
+	"chapter": true, "child": true, "city": true, "creation": true, "creator": true,
+	"day": true, "door": true, "dream": true, "ear": true, "field": true, "fire": true,
+	"friend": true, "game": true, "garden": true, "gardener": true, "gem": true,
+	"girl": true, "hand": true, "home": true, "homeland": true, "house": true,
+	"idea": true, "lantern": true, "letter": true, "light": true, "line": true,
+	"man": true, "map": true, "material": true, "moon": true, "mountain": true,
+	"name": true, "night": true, "order": true, "pain": true, "paint": true,
+	"painter": true, "parent": true, "plan": true, "planet": true, "plant": true,
+	"platform": true, "problem": true, "product": true, "reaction": true, "ring": true,
+	"river": true, "room": true, "school": true, "seat": true, "song": true,
+	"star": true, "story": true, "stranger": true, "stream": true, "string": true,
+	"teacher": true, "team": true, "thing": true, "time": true, "train": true,
+	"trouble": true, "tree": true, "water": true, "wonder": true, "word": true,
 	"world": true
 }
 
@@ -167,6 +174,10 @@ var _targets: Array = []             # [{"id":String,"kind":String,"label":Strin
 var _bonus_words: Array = []
 var _hints: int = START_HINTS
 var _bonus_hint_progress: int = 0
+var _hint_word: String = ""
+var _hint_target_id: String = ""
+var _hint_target_label: String = ""
+var _hint_reveal_count: int = 0
 var _used_words: Dictionary = {}
 var _running: bool = false
 var _submit_ready_announced: bool = false
@@ -585,6 +596,7 @@ func _start_wave(w: int) -> void:
 	_used_words.clear()
 	_bonus_words.clear()
 	_row2_chain.clear()
+	_reset_progress_hint()
 	_wave_score_start = _score
 	_wave_words_start = _total_words
 	_running = true
@@ -819,14 +831,27 @@ func _word_matches_type(word: String, word_type: String) -> bool:
 		"action":
 			return ACTION_WORDS.has(word) or word.ends_with("ing") or word.ends_with("ed")
 		"noun":
-			return NOUN_WORDS.has(word) or _looks_like_noun(word)
+			return _is_noun_word(word)
 	return false
 
-func _looks_like_noun(word: String) -> bool:
-	for suffix in ["tion", "ment", "ness", "ity", "age", "ship", "ance", "ence", "hood", "ism"]:
-		if word.ends_with(suffix):
-			return true
-	return ANIMAL_WORDS.has(word) or NATURE_WORDS.has(word)
+func _is_noun_word(word: String) -> bool:
+	if NOUN_WORDS.has(word) or ANIMAL_WORDS.has(word) or NATURE_WORDS.has(word):
+		return true
+	var base := _singular_noun_base(word)
+	return base != word and (NOUN_WORDS.has(base) or ANIMAL_WORDS.has(base) or NATURE_WORDS.has(base))
+
+func _singular_noun_base(word: String) -> String:
+	if word.length() <= 3:
+		return word
+	if word.ends_with("ies") and word.length() > 4:
+		return word.substr(0, word.length() - 3) + "y"
+	if word.ends_with("es") and word.length() > 4:
+		var base := word.substr(0, word.length() - 2)
+		if base.ends_with("ch") or base.ends_with("sh") or base.ends_with("s") or base.ends_with("x") or base.ends_with("z"):
+			return base
+	if word.ends_with("s") and not word.ends_with("ss"):
+		return word.substr(0, word.length() - 1)
+	return word
 
 # ---------------- Row 1 / Row 2 ----------------
 
@@ -834,7 +859,7 @@ func _build_row1() -> void:
 	for c in row1_grid.get_children():
 		c.queue_free()
 	_row1_tiles.clear()
-	row1_grid.columns = mini(_pool_letters.length(), 6 if _is_compact_layout() else 4)
+	row1_grid.columns = mini(_pool_letters.length(), 5 if _is_compact_layout() else 4)
 	var letters := []
 	for ch in _pool_letters:
 		letters.append(ch)
@@ -1032,6 +1057,8 @@ func _submit_word() -> void:
 	for t: WFoundTile in _row2_chain:
 		t.state = TileState.AVAILABLE
 	_row2_chain.clear()
+	if _current_hint_match().is_empty():
+		_reset_progress_hint()
 	_submit_ready_announced = false
 	_refresh_row2_label()
 	_update_submit_state()
@@ -1382,14 +1409,23 @@ func _use_hint() -> void:
 		_set_status("No hints — find %d bonus words for +1 hint." % (BONUS_WORDS_PER_HINT - _bonus_hint_progress))
 		_invalid_shake()
 		return
-	var hint_word := _pick_hint_word()
-	if hint_word.is_empty():
-		_set_status("No hint available for this wave.")
+	var hint_match := _current_hint_match()
+	if hint_match.is_empty():
+		hint_match = _pick_hint_match()
+		_hint_reveal_count = 0
+	if hint_match.is_empty():
+		_set_status("No hint available for unfinished targets.")
 		_invalid_shake()
 		return
+	var hint_word := hint_match.get("word", "") as String
+	var target_label := hint_match.get("target", "Target") as String
+	_hint_word = hint_word
+	_hint_target_id = hint_match.get("target_id", "") as String
+	_hint_target_label = target_label
+	_hint_reveal_count = clampi(_hint_reveal_count + 1, 1, hint_word.length())
 	_hints -= 1
 	_refresh_hint_button()
-	var hint_text := "Starts with: %s" % _hint_silhouette(hint_word)
+	var hint_text := "%s: %s" % [target_label, _hint_silhouette(hint_word, _hint_reveal_count)]
 	_set_status(hint_text)
 	_show_hint_feedback(hint_text)
 	Fx.banner(self, "HINT", VIBRANT_BLUE, Color.WHITE)
@@ -1397,29 +1433,49 @@ func _use_hint() -> void:
 	_haptic(28, 0.32)
 	_save_session()
 
-func _pick_hint_word() -> String:
+func _pick_hint_match() -> Dictionary:
 	var words: Array[String] = Words.words_from_letters(_pool_letters, MIN_WORD_LEN, false)
 	words.shuffle()
+	var open_targets: Array[Dictionary] = []
 	for t: Dictionary in _targets:
 		if int(t.get("done", 0)) >= int(t.get("count", 1)):
 			continue
+		open_targets.append(t)
+	open_targets.shuffle()
+	for t: Dictionary in open_targets:
 		for w: String in words:
 			if _used_words.has(w):
 				continue
 			if _target_def_matches_word(t, w.to_upper()):
-				return w
-	for w: String in words:
-		if not _used_words.has(w):
-			return w
-	return ""
+				return {"word": w, "target": t.get("label", "Target"), "target_id": t.get("id", "")}
+	return {}
 
-func _hint_silhouette(word: String) -> String:
+func _current_hint_match() -> Dictionary:
+	if _hint_word.is_empty() or _used_words.has(_hint_word.to_lower()):
+		return {}
+	for t: Dictionary in _targets:
+		if str(t.get("id", "")) != _hint_target_id:
+			continue
+		if int(t.get("done", 0)) >= int(t.get("count", 1)):
+			return {}
+		if _target_def_matches_word(t, _hint_word.to_upper()):
+			return {"word": _hint_word, "target": t.get("label", _hint_target_label), "target_id": _hint_target_id}
+	return {}
+
+func _reset_progress_hint() -> void:
+	_hint_word = ""
+	_hint_target_id = ""
+	_hint_target_label = ""
+	_hint_reveal_count = 0
+
+func _hint_silhouette(word: String, reveal_count: int = 1) -> String:
 	var up := word.to_upper()
 	if up.is_empty():
 		return ""
-	var parts: Array[String] = [up.substr(0, 1)]
-	for i in range(1, up.length()):
-		parts.append("_")
+	var shown := clampi(reveal_count, 1, up.length())
+	var parts: Array[String] = []
+	for i in up.length():
+		parts.append(up.substr(i, 1) if i < shown else "_")
 	return " ".join(parts)
 
 func _refresh_hint_button() -> void:
@@ -1468,6 +1524,10 @@ func _save_session() -> void:
 		"bonus_words": _bonus_words.duplicate(),
 		"hints": _hints,
 		"bonus_hint_progress": _bonus_hint_progress,
+		"hint_word": _hint_word,
+		"hint_target_id": _hint_target_id,
+		"hint_target_label": _hint_target_label,
+		"hint_reveal_count": _hint_reveal_count,
 		"total_words": _total_words,
 	}
 	GameState.save()
@@ -1511,6 +1571,12 @@ func _load_session() -> bool:
 		_bonus_words.append(w as String)
 	_hints = int(s.get("hints", START_HINTS))
 	_bonus_hint_progress = int(s.get("bonus_hint_progress", 0))
+	_hint_word = s.get("hint_word", "") as String
+	_hint_target_id = s.get("hint_target_id", "") as String
+	_hint_target_label = s.get("hint_target_label", "") as String
+	_hint_reveal_count = int(s.get("hint_reveal_count", 0))
+	if _current_hint_match().is_empty():
+		_reset_progress_hint()
 	_total_words = int(s.get("total_words", 0))
 	_running = true
 	_row2_chain.clear()
