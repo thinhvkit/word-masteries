@@ -2,9 +2,8 @@ extends Control
 ## Word Found — GDD §4.
 ## Row 1 = available letters (10–12), Row 2 = letters currently moved down.
 ## Tap Row 1 letter to move it to Row 2; tap Row 2 letter to return.
-## Submit a word to consume its letters and tick its length toward the wave target.
-## Bonus words (above/below target lengths) score extra. Unlimited waves; ends
-## on wave fail (no remaining letters can form a still-needed target word).
+## Submit a word to tick any matching quest targets.
+## Bonus words score extra when they do not advance a target.
 
 const Tile := preload("res://games/word_found/tile_node.gd")
 const TileState := Tile.State
@@ -43,8 +42,46 @@ const BURST_GOLD := [Color("#ffd027"), Color("#ff8a2a"), Color("#3aa8ff"), Color
 const MIN_WORD_LEN := 3
 const MAX_WAVE := 40                      # GDD hard ceiling
 const BONUS_LONG_MULT := 1.5              # >target length → base × 1.5
+const TARGETS_PER_WAVE := 4
 const ANCHOR_POOL_LENGTHS := [8, 9, 10, 11, 12]
 const MAX_DICTIONARY_POOL_ATTEMPTS := 160
+const TARGET_FIRST_LETTERS := ["G", "H", "B", "R", "E", "T", "N"]
+const TARGET_END_LETTERS := ["N", "R", "T"]
+
+const ANIMAL_WORDS := {
+	"ant": true, "ape": true, "bat": true, "bear": true, "bee": true, "bird": true,
+	"cat": true, "cow": true, "deer": true, "dog": true, "duck": true, "eagle": true,
+	"fish": true, "fox": true, "frog": true, "goat": true, "hare": true, "horse": true,
+	"lion": true, "mole": true, "mouse": true, "owl": true, "rat": true, "seal": true,
+	"shark": true, "sheep": true, "snake": true, "swan": true, "tiger": true, "whale": true,
+	"wolf": true, "worm": true
+}
+const NATURE_WORDS := {
+	"air": true, "beach": true, "branch": true, "brook": true, "cloud": true, "dew": true,
+	"earth": true, "field": true, "fire": true, "flower": true, "forest": true, "garden": true,
+	"grass": true, "hill": true, "lake": true, "leaf": true, "moon": true, "mountain": true,
+	"rain": true, "river": true, "root": true, "sea": true, "sky": true, "snow": true,
+	"soil": true, "star": true, "stone": true, "storm": true, "stream": true, "sun": true,
+	"tree": true, "water": true, "wind": true, "wood": true
+}
+const ACTION_WORDS := {
+	"act": true, "add": true, "bend": true, "bring": true, "build": true, "call": true,
+	"carry": true, "climb": true, "cook": true, "draw": true, "dream": true, "drive": true,
+	"eat": true, "find": true, "give": true, "grow": true, "hear": true, "hold": true,
+	"jump": true, "learn": true, "listen": true, "look": true, "make": true, "move": true,
+	"paint": true, "play": true, "read": true, "run": true, "say": true, "sing": true,
+	"speak": true, "teach": true, "think": true, "throw": true, "walk": true, "write": true
+}
+const NOUN_WORDS := {
+	"air": true, "art": true, "book": true, "boy": true, "branch": true, "car": true,
+	"child": true, "city": true, "day": true, "door": true, "dream": true, "field": true,
+	"fire": true, "friend": true, "garden": true, "girl": true, "hand": true, "home": true,
+	"house": true, "idea": true, "letter": true, "light": true, "line": true, "man": true,
+	"map": true, "moon": true, "mountain": true, "name": true, "night": true, "parent": true,
+	"plant": true, "river": true, "room": true, "school": true, "song": true, "star": true,
+	"story": true, "teacher": true, "thing": true, "tree": true, "water": true, "word": true,
+	"world": true
+}
 
 # Curated 10–12 letter anchor pools rich in sub-words. Each is verified by
 # the dictionary at runtime; if a pool fails the target-count check we resample.
@@ -81,23 +118,6 @@ const POOLS := [
 	"PLATFORM",          # 8
 ]
 
-# Wave target templates by tier and difficulty mode.
-# Each template: [{count:int, len:int}, ...]
-const TEMPLATES := {
-	"easy": {
-		"intermediate": [{"count": 2, "len": 3}, {"count": 1, "len": 4}],
-		"advanced":     [{"count": 2, "len": 4}, {"count": 1, "len": 5}],
-	},
-	"medium": {
-		"intermediate": [{"count": 3, "len": 3}, {"count": 2, "len": 4}],
-		"advanced":     [{"count": 3, "len": 4}, {"count": 2, "len": 5}],
-	},
-	"hard": {
-		"intermediate": [{"count": 4, "len": 3}, {"count": 2, "len": 4}, {"count": 1, "len": 5}],
-		"advanced":     [{"count": 3, "len": 4}, {"count": 3, "len": 5}, {"count": 1, "len": 6}],
-	},
-}
-
 @onready var wave_lbl: Label = $V/Top/Wave
 @onready var score_lbl: Label = $V/Top/Score
 @onready var targets_box: VBoxContainer = $V/TargetsBox
@@ -130,7 +150,7 @@ var _used_pools: Array = []          # pools already used this session
 var _dictionary_anchor_pools_by_length: Dictionary = {}
 var _row1_tiles: Array = []          # all 10-12 tiles in Row 1; their state tells the rest
 var _row2_chain: Array = []          # ordered subset currently in Row 2
-var _targets: Array = []             # [{"count":N,"len":L,"done":k}, ...]
+var _targets: Array = []             # [{"id":String,"kind":String,"label":String,"count":N,"done":k}, ...]
 var _bonus_words: Array = []
 var _used_words: Dictionary = {}
 var _running: bool = false
@@ -486,9 +506,8 @@ func _start_wave(w: int) -> void:
 	_row2_chain.clear()
 	_running = true
 
-	# Pick a pool that supports the wave's targets. Try up to N pools.
-	var template := _template_for_wave(_wave)
-	var picked := _pick_pool(template)
+	# Pick a pool that supports four randomized quest targets.
+	var picked := _pick_pool()
 	_pool_letters = picked.pool
 	_targets = picked.targets
 	_build_row1()
@@ -499,24 +518,17 @@ func _start_wave(w: int) -> void:
 	_set_status("Wave %d — fill the targets below." % _wave)
 	_save_session()
 
-func _template_for_wave(w: int) -> Array:
-	var tier := "easy"
-	if w >= 16: tier = "hard"
-	elif w >= 6: tier = "medium"
-	var mode_key := "advanced" if GameState.mode == GameState.Mode.ADVANCED else "intermediate"
-	return (TEMPLATES[tier][mode_key] as Array).duplicate(true)
-
-func _pick_pool(template: Array) -> Dictionary:
-	var picked := _pick_dictionary_pool(template, false)
+func _pick_pool() -> Dictionary:
+	var picked := _pick_dictionary_pool(false)
 	if not picked.is_empty():
 		return picked
 	_used_pools.clear()
-	picked = _pick_dictionary_pool(template, true)
+	picked = _pick_dictionary_pool(true)
 	if not picked.is_empty():
 		return picked
-	return _pick_curated_pool(template)
+	return _pick_curated_pool()
 
-func _pick_dictionary_pool(template: Array, allow_used: bool) -> Dictionary:
+func _pick_dictionary_pool(allow_used: bool) -> Dictionary:
 	var lengths := ANCHOR_POOL_LENGTHS.duplicate()
 	lengths.shuffle()
 	var checked := 0
@@ -529,10 +541,10 @@ func _pick_dictionary_pool(template: Array, allow_used: bool) -> Dictionary:
 			checked += 1
 			if not allow_used and _used_pools.has(p):
 				continue
-			var avail := _bucket_words(p)
-			if _template_satisfiable(template, avail):
+			var targets := _choose_targets_for_pool(p)
+			if targets.size() >= TARGETS_PER_WAVE:
 				_used_pools.append(p)
-				return {"pool": p, "targets": _annotate_targets(template)}
+				return {"pool": p, "targets": targets}
 	return {}
 
 func _dictionary_anchor_source(length: int) -> Array[String]:
@@ -567,40 +579,171 @@ func _count_vowels_text(text: String) -> int:
 			v += 1
 	return v
 
-func _pick_curated_pool(template: Array) -> Dictionary:
+func _pick_curated_pool() -> Dictionary:
 	var attempts := POOLS.duplicate()
 	attempts.shuffle()
 	for p: String in attempts:
-		var avail := _bucket_words(p)
-		if _template_satisfiable(template, avail):
+		var targets := _choose_targets_for_pool(p)
+		if targets.size() >= TARGETS_PER_WAVE:
 			_used_pools.append(p)
-			return {"pool": p, "targets": _annotate_targets(template)}
-	return {"pool": "STREAMING", "targets": _annotate_targets(template)}
+			return {"pool": p, "targets": targets}
+	return {"pool": "STREAMING", "targets": _fallback_targets_for_pool("STREAMING")}
 
-func _bucket_words(pool: String) -> Dictionary:
-	# Returns {length: [word, ...]} of all dictionary words formable from pool
-	# (each letter used at most once).
+func _choose_targets_for_pool(pool: String) -> Array:
 	var words: Array[String] = Words.words_from_letters(pool, MIN_WORD_LEN, false)
-	var buckets: Dictionary = {}
-	for w: String in words:
-		var k: int = w.length()
-		if not buckets.has(k):
-			buckets[k] = []
-		buckets[k].append(w)
-	return buckets
+	var candidates: Array = []
+	for def: Dictionary in _all_target_defs():
+		var goal := _goal_for_target(def)
+		var have := 0
+		for w: String in words:
+			if _target_def_matches_word(def, w.to_upper()):
+				have += 1
+		if have >= goal:
+			candidates.append(_annotate_target_def(def, goal))
+	candidates.shuffle()
+	return _select_target_mix(candidates)
 
-func _template_satisfiable(template: Array, buckets: Dictionary) -> bool:
-	for t: Dictionary in template:
-		var have: int = (buckets.get(t.len, []) as Array).size()
-		if have < t.count:
-			return false
-	return true
+func _fallback_targets_for_pool(pool: String) -> Array:
+	var targets := _choose_targets_for_pool(pool)
+	if targets.size() >= TARGETS_PER_WAVE:
+		return targets
+	return [
+		{"id": "len_3", "kind": "length_exact", "label": "3 letter words", "badge": "3", "category": "length", "value": 3, "count": 2, "done": 0, "tone": 3},
+		{"id": "len_4", "kind": "length_exact", "label": "4 letter words", "badge": "4", "category": "length", "value": 4, "count": 1, "done": 0, "tone": 4},
+		{"id": "vowels_2", "kind": "min_vowels", "label": "Has 2+ vowels", "badge": "V", "category": "pattern", "value": 2, "count": 2, "done": 0, "tone": 5},
+		{"id": "long_5", "kind": "length_min", "label": "Long words", "badge": "5+", "category": "length", "value": 5, "count": 1, "done": 0, "tone": 6},
+	]
 
-func _annotate_targets(template: Array) -> Array:
-	var out: Array = []
-	for t: Dictionary in template:
-		out.append({"count": t.count, "len": t.len, "done": 0})
+func _all_target_defs() -> Array:
+	var defs: Array = [
+		{"id": "len_3", "kind": "length_exact", "label": "3 letter words", "badge": "3", "category": "length", "value": 3, "tone": 3},
+		{"id": "len_4", "kind": "length_exact", "label": "4 letter words", "badge": "4", "category": "length", "value": 4, "tone": 4},
+		{"id": "len_5", "kind": "length_exact", "label": "5 letter words", "badge": "5", "category": "length", "value": 5, "tone": 5},
+		{"id": "len_6_plus", "kind": "length_min", "label": "6+ letter words", "badge": "6+", "category": "length", "value": 6, "tone": 6},
+		{"id": "short_3", "kind": "length_max", "label": "Short words", "badge": "<=3", "category": "length", "value": 3, "tone": 3},
+		{"id": "long_5", "kind": "length_min", "label": "Long words", "badge": "5+", "category": "length", "value": 5, "tone": 6},
+		{"id": "nouns", "kind": "word_type", "label": "Nouns", "badge": "N", "category": "type", "value": "noun", "tone": 4},
+		{"id": "verbs", "kind": "word_type", "label": "Verbs / Actions", "badge": "A", "category": "type", "value": "action", "tone": 5},
+		{"id": "animals", "kind": "word_type", "label": "Animals", "badge": "AN", "category": "type", "value": "animal", "tone": 3},
+		{"id": "nature", "kind": "word_type", "label": "Nature words", "badge": "NW", "category": "type", "value": "nature", "tone": 6},
+		{"id": "vowels_2", "kind": "min_vowels", "label": "Has 2+ vowels", "badge": "V", "category": "pattern", "value": 2, "tone": 5},
+		{"id": "repeated", "kind": "repeated_letter", "label": "Has repeated letter", "badge": "RR", "category": "pattern", "tone": 4},
+	]
+	for letter: String in TARGET_FIRST_LETTERS:
+		defs.append({"id": "starts_%s" % letter.to_lower(), "kind": "starts", "label": "Starts with %s" % letter, "badge": letter, "category": "first", "value": letter, "tone": 4})
+	for letter: String in TARGET_END_LETTERS:
+		defs.append({"id": "ends_%s" % letter.to_lower(), "kind": "ends", "label": "Ends with %s" % letter, "badge": letter, "category": "pattern", "value": letter, "tone": 3})
+	return defs
+
+func _select_target_mix(candidates: Array) -> Array:
+	var selected: Array = []
+	var used_ids: Dictionary = {}
+	var categories := ["length", "first", "type", "pattern"]
+	categories.shuffle()
+	for cat: String in categories:
+		var matches: Array = []
+		for t: Dictionary in candidates:
+			if t.category == cat:
+				matches.append(t)
+		if not matches.is_empty():
+			var picked: Dictionary = matches.pick_random()
+			selected.append(picked)
+			used_ids[picked.id] = true
+	for t: Dictionary in candidates:
+		if selected.size() >= TARGETS_PER_WAVE:
+			break
+		if not used_ids.has(t.id):
+			selected.append(t)
+			used_ids[t.id] = true
+	return selected.slice(0, TARGETS_PER_WAVE)
+
+func _goal_for_target(def: Dictionary) -> int:
+	var tier := 0
+	if _wave >= 16:
+		tier = 2
+	elif _wave >= 6:
+		tier = 1
+	var kind := def.kind as String
+	var value: Variant = def.get("value", 0)
+	if kind == "length_exact":
+		var n := int(value)
+		if n <= 4:
+			return 2 + tier
+		if n == 5:
+			return 1 + tier
+		return 1 + int(tier >= 2)
+	if kind == "length_min" and int(value) >= 6:
+		return 1 + int(tier >= 2)
+	if kind == "starts" or kind == "word_type":
+		return 1 + int(tier >= 1)
+	return 2 + int(tier >= 1)
+
+func _annotate_target_def(def: Dictionary, goal: int) -> Dictionary:
+	var out := def.duplicate(true)
+	out["count"] = goal
+	out["done"] = 0
 	return out
+
+func _legacy_length_target(word_len: int, count: int, done: int) -> Dictionary:
+	return {
+		"id": "len_%d" % word_len,
+		"kind": "length_exact",
+		"label": "%d letter words" % word_len,
+		"badge": str(word_len),
+		"category": "length",
+		"value": word_len,
+		"count": count,
+		"done": done,
+		"tone": clampi(word_len, 3, 6),
+	}
+
+func _target_def_matches_word(target: Dictionary, word_up: String) -> bool:
+	var kind := target.get("kind", "") as String
+	var value: Variant = target.get("value", null)
+	match kind:
+		"length_exact":
+			return word_up.length() == int(value)
+		"length_min":
+			return word_up.length() >= int(value)
+		"length_max":
+			return word_up.length() <= int(value)
+		"starts":
+			return word_up.begins_with(value as String)
+		"ends":
+			return word_up.ends_with(value as String)
+		"min_vowels":
+			return _count_vowels_text(word_up) >= int(value)
+		"repeated_letter":
+			return _has_repeated_letter(word_up)
+		"word_type":
+			return _word_matches_type(word_up.to_lower(), value as String)
+	return false
+
+func _has_repeated_letter(word_up: String) -> bool:
+	var seen := {}
+	for ch in word_up:
+		if seen.has(ch):
+			return true
+		seen[ch] = true
+	return false
+
+func _word_matches_type(word: String, word_type: String) -> bool:
+	match word_type:
+		"animal":
+			return ANIMAL_WORDS.has(word)
+		"nature":
+			return NATURE_WORDS.has(word)
+		"action":
+			return ACTION_WORDS.has(word) or word.ends_with("ing") or word.ends_with("ed")
+		"noun":
+			return NOUN_WORDS.has(word) or _looks_like_noun(word)
+	return false
+
+func _looks_like_noun(word: String) -> bool:
+	for suffix in ["tion", "ment", "ness", "ity", "age", "ship", "ance", "ence", "hood", "ism"]:
+		if word.ends_with(suffix):
+			return true
+	return ANIMAL_WORDS.has(word) or NATURE_WORDS.has(word)
 
 # ---------------- Row 1 / Row 2 ----------------
 
@@ -743,9 +886,11 @@ func _build_targets_box() -> void:
 	targets_box.add_theme_constant_override("separation", 6)
 	for t in _targets:
 		var row := _TargetRow.new()
-		row.word_len = t.len
-		row.total = t.count
-		row.done = t.done
+		row.badge = t.get("badge", str(t.get("value", "?"))) as String
+		row.title = t.get("label", "Target") as String
+		row.total = int(t.get("count", 1))
+		row.done = int(t.get("done", 0))
+		row.tone = int(t.get("tone", 4))
 		targets_box.add_child(row)
 
 func _refresh_targets_box() -> void:
@@ -774,10 +919,9 @@ func _submit_word() -> void:
 	# Score
 	var matched_target := false
 	for t in _targets:
-		if t.len == word.length() and t.done < t.count:
-			t.done += 1
+		if int(t.get("done", 0)) < int(t.get("count", 1)) and _target_def_matches_word(t, word_up):
+			t.done = int(t.get("done", 0)) + 1
 			matched_target = true
-			break
 	var base := word.length() * 10
 	if not matched_target and word.length() > _max_target_length():
 		base = int(base * BONUS_LONG_MULT)
@@ -887,14 +1031,16 @@ func _row2_center() -> Vector2:
 
 func _targets_complete() -> bool:
 	for t in _targets:
-		if t.done < t.count:
+		if int(t.get("done", 0)) < int(t.get("count", 1)):
 			return false
 	return true
 
 func _max_target_length() -> int:
 	var m := 0
 	for t in _targets:
-		m = maxi(m, int(t.len))
+		var kind := t.get("kind", "") as String
+		if kind == "length_exact" or kind == "length_min":
+			m = maxi(m, int(t.get("value", 0)))
 	return m
 
 # ---------------- HUD ----------------
@@ -945,7 +1091,17 @@ func _load_session() -> bool:
 	_targets = []
 	for t: Variant in s.get("targets", []):
 		if t is Dictionary:
-			_targets.append({"count": int(t.count), "len": int(t.len), "done": int(t.done)})
+			if (t as Dictionary).has("kind"):
+				var restored := (t as Dictionary).duplicate(true)
+				restored["count"] = int(restored.get("count", 1))
+				restored["done"] = int(restored.get("done", 0))
+				if not restored.has("label"):
+					restored["label"] = "Target"
+				if not restored.has("badge"):
+					restored["badge"] = str(restored.get("value", "?"))
+				_targets.append(restored)
+			elif (t as Dictionary).has("len"):
+				_targets.append(_legacy_length_target(int((t as Dictionary).get("len", 3)), int((t as Dictionary).get("count", 1)), int((t as Dictionary).get("done", 0))))
 	if _targets.is_empty():
 		return false
 	_used_words.clear()
@@ -1025,8 +1181,12 @@ func _haptic_error() -> void:
 
 class _TargetRow extends Control:
 	const _FONT: Font = preload("res://assets/fonts/LilitaOne-Regular.ttf")
-	var word_len: int = 3 :
-		set(v): word_len = v; queue_redraw()
+	var badge: String = "3" :
+		set(v): badge = v; queue_redraw()
+	var title: String = "3 letter words" :
+		set(v): title = v; queue_redraw()
+	var tone: int = 3 :
+		set(v): tone = v; queue_redraw()
 	var total: int = 3 :
 		set(v): total = v; queue_redraw()
 	var done: int = 0 :
@@ -1040,7 +1200,7 @@ class _TargetRow extends Control:
 	func _ready() -> void:
 		custom_minimum_size = Vector2(0, 48)
 	func _draw() -> void:
-		var tc: Dictionary = _TIER.get(word_len, _TIER[3])
+		var tc: Dictionary = _TIER.get(tone, _TIER[3])
 		var h := size.y
 		var full := done >= total
 		var pill_a := 0.15 if full else 0.08
@@ -1053,17 +1213,26 @@ class _TargetRow extends Control:
 		_gradient_circle(bp, br, tc.top, tc.bot)
 		draw_arc(bp, br, 0, TAU, 24, tc.glow, 1.5, true)
 		draw_circle(bp + Vector2(-br * 0.25, -br * 0.28), br * 0.12, Color(1, 1, 1, 0.45))
-		var ns := str(word_len)
-		var nfs := 16
+		var ns := badge
+		var nfs := 16 if ns.length() <= 2 else 11
 		var nw := _FONT.get_string_size(ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs)
 		var na := _FONT.get_ascent(nfs)
 		var nd := _FONT.get_descent(nfs)
 		draw_string(_FONT, bp + Vector2(-nw.x * 0.5, (na - nd) * 0.5), ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color.WHITE)
-		var sx := 58.0
-		var sp := 30.0
+		var sp := 22.0
 		var sr := 10.0
+		var pg := "%d/%d" % [done, total]
+		var pfs := 14
+		var pw := _FONT.get_string_size(pg, HORIZONTAL_ALIGNMENT_RIGHT, -1, pfs)
+		var pip_start := maxf(150.0, size.x - pw.x - 42.0 - float(maxi(total - 1, 0)) * sp)
+		var title_width := maxf(40.0, pip_start - 66.0)
+		var tfs := 13
+		var ta := _FONT.get_ascent(tfs)
+		var td := _FONT.get_descent(tfs)
+		var title_color := Color(1, 1, 1, 0.92) if full else Color(1, 1, 1, 0.72)
+		draw_string(_FONT, Vector2(58, h * 0.5 + (ta - td) * 0.5), title, HORIZONTAL_ALIGNMENT_LEFT, title_width, tfs, title_color)
 		for i in total:
-			var c := Vector2(sx + float(i) * sp, h * 0.5)
+			var c := Vector2(pip_start + float(i) * sp, h * 0.5)
 			var pts := _star_pts(c, sr)
 			if i < done:
 				draw_circle(c, sr + 3, Color(tc.glow.r, tc.glow.g, tc.glow.b, 0.25))
@@ -1076,9 +1245,6 @@ class _TargetRow extends Control:
 				var ol := pts.duplicate()
 				ol.append(pts[0])
 				draw_polyline(ol, Color(1, 1, 1, 0.18), 1.5, true)
-		var pg := "%d/%d" % [done, total]
-		var pfs := 14
-		var pw := _FONT.get_string_size(pg, HORIZONTAL_ALIGNMENT_RIGHT, -1, pfs)
 		var pa := _FONT.get_ascent(pfs)
 		var pd := _FONT.get_descent(pfs)
 		var pc: Color = tc.glow if full else Color(1, 1, 1, 0.4)
