@@ -22,7 +22,7 @@
 
 ## Target System
 
-Each wave randomly assigns **4 quest targets** from 21+ different types.  
+Each wave randomly assigns **3 quest targets** from 21+ different types.  
 Targets reset and refresh every wave with new combinations.
 
 ### Target Categories
@@ -83,8 +83,8 @@ Star rating based on targets completed:
 
 | Targets hit | Stars |
 |---|---|
-| All 4 | ⭐⭐⭐ |
-| 2–3 | ⭐⭐ |
+| All 3 | ⭐⭐⭐ |
+| 2 | ⭐⭐ |
 | 1 | ⭐ |
 | 0 | 🌟 (participation) |
 
@@ -105,7 +105,7 @@ Modal shows:
 
 ### Earning Extra Hints — Bonus Word System
 
-A **bonus word** is any valid word submitted that doesn't advance any of the 4 active wave targets.
+A **bonus word** is any valid word submitted that doesn't advance any of the 3 active wave targets.
 
 ```
 Every 10 bonus words found → +1 Hint earned automatically
@@ -182,32 +182,6 @@ Background transitions smoothly (1.2s ease) between themes.
 
 Praise is shown below the word display with coin badge (+50🪙).  
 In Fever Mode, praise text glows hot pink.
-
----
-
-## UI Layout (top → bottom)
-
-```
-[ Wave badge ]  [ Title ]  [ 🪙 Coins ]
-[ Wave timer bar ]
-[ Target 1 ] [ Target 3 ] [ 💡 ]
-[ Target 2 ] [ Target 4 ]
-[ Live target match chips ]          ← appears when word qualifies
-[ Word display — mini tiles ]
-[ Praise / status message ]
-[ Letter board — 9 tiles ]
-[ WORDS counter ] [ Submit button ]
-```
-
----
-
-## Tech Stack
-
-- **React** (functional components, hooks)
-- **CSS-in-JS** (inline styles, no external libraries)
-- **State:** `useState`, `useEffect`, `useRef`, `useCallback`
-- **Animations:** CSS keyframes (`popIn`, `feverPulse`, `completePop`, `bounceEmoji`)
-- **No backend** — all logic is client-side, dictionary is embedded
 
 ---
 

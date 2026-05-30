@@ -42,7 +42,7 @@ const BURST_GOLD := [Color("#ffd027"), Color("#ff8a2a"), Color("#3aa8ff"), Color
 const MIN_WORD_LEN := 3
 const MAX_WAVE := 40                      # GDD hard ceiling
 const BONUS_LONG_MULT := 1.5              # >target length → base × 1.5
-const TARGETS_PER_WAVE := 4
+const TARGETS_PER_WAVE := 3
 const START_HINTS := 3
 const BONUS_WORDS_PER_HINT := 10
 const ANCHOR_POOL_LENGTHS := [8, 9, 10, 11, 12]
@@ -134,6 +134,8 @@ const POOLS := [
 
 var _wave: int = 1
 var _score: int = 0
+var _wave_score_start: int = 0
+var _wave_words_start: int = 0
 var _row1_bg: Control                # wooden backdrop behind Row 1
 var _row1_card: Control              # parent card so we can layer bg under grid
 var _row1_stack: Control             # host that the grid is scaled + centered in
@@ -141,6 +143,12 @@ var _submit_glow: Panel              # glowing shadow ring on Submit when chain 
 var _score_chip: Control             # captured for confetti targeting
 var _wave_chip: Control
 var _hint_btn: Button
+var _praise_box: PanelContainer
+var _praise_icon: TextureRect
+var _praise_label: Label
+var _praise_badge: Label
+var _praise_show_id: int = 0
+var _wave_modal: Control
 var _row2_pill: PanelContainer
 var _words_count_lbl: Label
 var _mascot: Control
@@ -219,6 +227,7 @@ func _apply_design() -> void:
 	v.move_child(_row2_pill, row2_node.get_index())
 	row2_node.reparent(_row2_pill, false)
 	row2_holder.visible = false
+	_build_praise_row(v, _row2_pill.get_index() + 1)
 
 	# Row1 — stone slab backdrop behind the grid.
 	var row1_lbl: Label = $V/Row1Label
@@ -321,6 +330,47 @@ func _build_header_avatar(hdr_back: Button) -> void:
 	_mascot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_mascot_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mascot.add_child(_mascot_icon)
+
+func _build_praise_row(parent: Control, index: int) -> void:
+	_praise_box = PanelContainer.new()
+	_praise_box.visible = false
+	_praise_box.modulate.a = 0.0
+	_praise_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0.28)
+	sb.set_corner_radius_all(16)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(1, 1, 1, 0.12)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 7
+	sb.content_margin_bottom = 7
+	_praise_box.add_theme_stylebox_override("panel", sb)
+	parent.add_child(_praise_box)
+	parent.move_child(_praise_box, index)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	_praise_box.add_child(row)
+	_praise_icon = TextureRect.new()
+	_praise_icon.custom_minimum_size = Vector2(26, 26)
+	_praise_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_praise_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_praise_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_praise_icon)
+	_praise_label = Label.new()
+	_praise_label.add_theme_font_size_override("font_size", 18)
+	_praise_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.48))
+	_praise_label.add_theme_constant_override("outline_size", 3)
+	_praise_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_praise_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_praise_label)
+	_praise_badge = Label.new()
+	_praise_badge.add_theme_font_size_override("font_size", 15)
+	_praise_badge.add_theme_color_override("font_color", VIBRANT_GOLD)
+	_praise_badge.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+	_praise_badge.add_theme_constant_override("outline_size", 3)
+	row.add_child(_praise_badge)
 
 func _wrap_in_vibrant_chip(lbl: Label, bg: Color, border: Color) -> Control:
 	var parent := lbl.get_parent() as Control
@@ -519,9 +569,11 @@ func _start_wave(w: int) -> void:
 	_used_words.clear()
 	_bonus_words.clear()
 	_row2_chain.clear()
+	_wave_score_start = _score
+	_wave_words_start = _total_words
 	_running = true
 
-	# Pick a pool that supports four randomized quest targets.
+	# Pick a pool that supports the randomized quest targets.
 	var picked := _pick_pool()
 	_pool_letters = picked.pool
 	_targets = picked.targets
@@ -841,11 +893,11 @@ func _refresh_row2_label() -> void:
 	row2_holder.visible = false
 	row2_label.visible = true
 	if word.is_empty():
-		row2_label.text = "Tap letters to spell a word"
+		row2_label.text = "—"
 		row2_label.add_theme_font_size_override("font_size", 28)
-		row2_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.2))
+		row2_label.add_theme_color_override("font_color", Color.WHITE)
 	else:
-		row2_label.text = _spaced_word(word)
+		row2_label.text = word
 		row2_label.add_theme_font_size_override("font_size", 28)
 		row2_label.add_theme_color_override("font_color", Color.WHITE)
 	_refresh_word_feedback()
@@ -954,6 +1006,7 @@ func _submit_word() -> void:
 		var g := Fx.gradient_for_letter(t.letter)
 		cols.append(g[1])
 	_success_feedback(word_up, earned, matched_target, froms, cols)
+	_show_praise(word_up.length(), earned)
 
 	_total_words += 1
 	if _words_count_lbl != null:
@@ -972,13 +1025,13 @@ func _submit_word() -> void:
 	_save_session()
 	if _targets_complete():
 		_award_hint("+1 Hint!")
+		_save_session()
 		_set_status("Wave %d cleared! +%d XP, +1 Hint" % [_wave, earned])
 		Fx.banner(self, "WAVE %d!" % _wave, VIBRANT_GOLD, VIBRANT_GOLD_DARK)
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
 		_mascot_react("Wave!")
 		_running = false
-		await get_tree().create_timer(0.9).timeout
-		_start_wave(_wave + 1)
+		_show_wave_complete_modal()
 		return
 
 	_set_status("+%d XP — %s" % [earned, word_up])
@@ -1041,6 +1094,82 @@ func _success_feedback(word_up: String, earned: int, matched_target: bool, froms
 	if n >= 6:
 		Fx.fireworks(self, Vector2(size.x * 0.5, size.y * 0.4))
 
+func _show_praise(word_len: int, earned: int) -> void:
+	var praise := _praise_for_length(word_len)
+	_show_feedback_message(
+		praise.text,
+		"+%d XP" % earned,
+		praise.icon,
+		VIBRANT_MAGENTA if _word_found_fever_active() else Color.WHITE,
+		VIBRANT_GOLD,
+		1.15
+	)
+
+func _show_hint_feedback(hint_text: String) -> void:
+	_show_feedback_message(
+		hint_text,
+		"Hint",
+		"res://assets/icons/bulb.svg",
+		VIBRANT_BLUE,
+		Color("#dff7ff"),
+		2.4
+	)
+
+func _show_feedback_message(message: String, badge: String, icon_path: String, text_color: Color, badge_color: Color, hold_sec: float) -> void:
+	if _praise_box == null or _praise_label == null or _praise_badge == null:
+		return
+	_praise_show_id += 1
+	var show_id := _praise_show_id
+	_praise_box.visible = true
+	_praise_label.text = message
+	_set_texture(_praise_icon, icon_path)
+	_praise_label.add_theme_color_override("font_color", text_color)
+	_praise_badge.text = badge
+	_praise_badge.add_theme_color_override("font_color", badge_color)
+	_praise_box.scale = Vector2(0.94, 0.94)
+	_praise_box.modulate.a = 1.0
+	var tw := _praise_box.create_tween()
+	tw.tween_property(_praise_box, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(hold_sec)
+	tw.tween_property(_praise_box, "modulate:a", 0.0, 0.25)
+	tw.tween_callback(func():
+		if show_id == _praise_show_id:
+			_praise_box.visible = false
+	)
+
+func _praise_for_length(word_len: int) -> Dictionary:
+	var choices := []
+	var icon := "res://assets/icons/praise_smile.svg"
+	if word_len <= 3:
+		choices = ["Nice!", "Cool!", "Sweet!"]
+	elif word_len == 4:
+		choices = ["Good job!", "Awesome!", "Nailed it!"]
+		icon = "res://assets/icons/praise_spark.svg"
+	elif word_len == 5:
+		choices = ["Great!!", "Brilliant!", "Wow!!"]
+		icon = "res://assets/icons/praise_fire.svg"
+	elif word_len == 6:
+		choices = ["Amazing!!!", "Incredible!", "On fire!!"]
+		icon = "res://assets/icons/praise_rocket.svg"
+	elif word_len == 7:
+		choices = ["LEGENDARY!!", "UNSTOPPABLE!"]
+		icon = "res://assets/icons/praise_crown.svg"
+	else:
+		choices = ["GODLIKE!!!!", "WORD MASTER!"]
+		icon = "res://assets/icons/praise_gem.svg"
+	return {"text": choices.pick_random(), "icon": icon}
+
+func _word_found_fever_active() -> bool:
+	return false
+
+func _set_texture(rect: TextureRect, path: String) -> void:
+	if rect == null:
+		return
+	if ResourceLoader.exists(path):
+		rect.texture = load(path)
+	else:
+		rect.texture = null
+
 func _row2_center() -> Vector2:
 	if _row2_pill == null:
 		return size * 0.5
@@ -1059,6 +1188,155 @@ func _max_target_length() -> int:
 		if kind == "length_exact" or kind == "length_min":
 			m = maxi(m, int(t.get("value", 0)))
 	return m
+
+# ---------------- wave complete ----------------
+
+func _show_wave_complete_modal() -> void:
+	if _wave_modal != null:
+		_wave_modal.queue_free()
+	var overlay := Panel.new()
+	_wave_modal = overlay
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 200
+	var overlay_sb := StyleBoxFlat.new()
+	overlay_sb.bg_color = Color(0, 0, 0, 0.62)
+	overlay.add_theme_stylebox_override("panel", overlay_sb)
+	add_child(overlay)
+
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(330, 0)
+	card.set_anchors_preset(Control.PRESET_CENTER)
+	card.position = Vector2(-165, -220)
+	var card_sb := StyleBoxFlat.new()
+	card_sb.bg_color = DARK_CARD
+	card_sb.set_corner_radius_all(22)
+	card_sb.set_border_width_all(3)
+	card_sb.border_color = VIBRANT_GOLD
+	card_sb.shadow_color = Color(0, 0, 0, 0.4)
+	card_sb.shadow_size = 12
+	card_sb.shadow_offset = Vector2i(0, 6)
+	card_sb.content_margin_left = 18
+	card_sb.content_margin_right = 18
+	card_sb.content_margin_top = 18
+	card_sb.content_margin_bottom = 18
+	card.add_theme_stylebox_override("panel", card_sb)
+	overlay.add_child(card)
+
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 12)
+	card.add_child(box)
+
+	var title := Label.new()
+	title.text = "Wave %d Complete" % _wave
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", VIBRANT_GOLD)
+	box.add_child(title)
+
+	var hit_count := _completed_target_count()
+	box.add_child(_star_rating_row(hit_count))
+
+	var results := VBoxContainer.new()
+	results.add_theme_constant_override("separation", 6)
+	box.add_child(results)
+	for t: Dictionary in _targets:
+		var done_target := int(t.get("done", 0)) >= int(t.get("count", 1))
+		results.add_child(_target_result_row(t, done_target))
+
+	var summary := Label.new()
+	summary.text = "Coins earned: %d\nWords submitted: %d" % [_score - _wave_score_start, _total_words - _wave_words_start]
+	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	summary.add_theme_font_size_override("font_size", 16)
+	summary.add_theme_color_override("font_color", Color.WHITE)
+	box.add_child(summary)
+
+	box.add_child(_next_theme_row())
+
+	var next := Button.new()
+	next.text = "Next Wave →"
+	next.custom_minimum_size = Vector2(0, 50)
+	next.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_dungeon_btn(next, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
+	next.pressed.connect(func():
+		if _wave_modal != null:
+			_wave_modal.queue_free()
+			_wave_modal = null
+		_start_wave(_wave + 1)
+	)
+	box.add_child(next)
+
+func _completed_target_count() -> int:
+	var hit := 0
+	for t: Dictionary in _targets:
+		if int(t.get("done", 0)) >= int(t.get("count", 1)):
+			hit += 1
+	return hit
+
+func _target_result_row(target: Dictionary, done_target: bool) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(18, 18)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_set_texture(icon, "res://assets/icons/check.svg" if done_target else "res://assets/icons/xmark.svg")
+	row.add_child(icon)
+	var lbl := Label.new()
+	lbl.text = "%s  %d/%d" % [target.get("label", "Target"), int(target.get("done", 0)), int(target.get("count", 1))]
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", READY_GREEN if done_target else ERROR_RED)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(lbl)
+	return row
+
+func _star_rating_row(hit_count: int) -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	var count := _star_count(hit_count)
+	for i in count:
+		var icon := TextureRect.new()
+		icon.custom_minimum_size = Vector2(28, 28)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.modulate = VIBRANT_GOLD
+		_set_texture(icon, "res://assets/icons/star.svg")
+		row.add_child(icon)
+	if hit_count == 0:
+		var lbl := Label.new()
+		lbl.text = "Participation"
+		lbl.add_theme_font_size_override("font_size", 18)
+		lbl.add_theme_color_override("font_color", VIBRANT_GOLD)
+		row.add_child(lbl)
+	return row
+
+func _star_count(hit_count: int) -> int:
+	if hit_count >= TARGETS_PER_WAVE:
+		return 3
+	if hit_count >= 2:
+		return 2
+	if hit_count == 1:
+		return 1
+	return 1
+
+func _next_theme_row() -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(22, 22)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.modulate = Color("#a7f8ff")
+	_set_texture(icon, "res://assets/icons/leaf.svg")
+	row.add_child(icon)
+	var lbl := Label.new()
+	lbl.text = "Next theme: Wave %d" % (_wave + 1)
+	lbl.add_theme_font_size_override("font_size", 15)
+	lbl.add_theme_color_override("font_color", Color("#a7f8ff"))
+	row.add_child(lbl)
+	return row
 
 # ---------------- hints ----------------
 
@@ -1093,7 +1371,9 @@ func _use_hint() -> void:
 		return
 	_hints -= 1
 	_refresh_hint_button()
-	_set_status("Starts with: %s" % _hint_silhouette(hint_word))
+	var hint_text := "Starts with: %s" % _hint_silhouette(hint_word)
+	_set_status(hint_text)
+	_show_hint_feedback(hint_text)
 	Fx.banner(self, "HINT", VIBRANT_BLUE, Color.WHITE)
 	_mascot_react("Try it!")
 	_haptic(28, 0.32)
@@ -1127,7 +1407,9 @@ func _hint_silhouette(word: String) -> String:
 func _refresh_hint_button() -> void:
 	if _hint_btn == null:
 		return
-	_hint_btn.text = "💡 %d\n%d/%d" % [_hints, _bonus_hint_progress, BONUS_WORDS_PER_HINT]
+	if ResourceLoader.exists("res://assets/icons/bulb.svg"):
+		_hint_btn.icon = load("res://assets/icons/bulb.svg")
+	_hint_btn.text = "%d\n%d/%d" % [_hints, _bonus_hint_progress, BONUS_WORDS_PER_HINT]
 	_hint_btn.disabled = _hints <= 0
 	if _hints > 0:
 		_dungeon_btn(_hint_btn, VIBRANT_BLUE_DARK, VIBRANT_BLUE, Color.WHITE)
@@ -1185,6 +1467,8 @@ func _load_session() -> bool:
 		return false
 	_targets = []
 	for t: Variant in s.get("targets", []):
+		if _targets.size() >= TARGETS_PER_WAVE:
+			break
 		if t is Dictionary:
 			if (t as Dictionary).has("kind"):
 				var restored := (t as Dictionary).duplicate(true)
@@ -1296,7 +1580,7 @@ class _TargetRow extends Control:
 		6: {"top": Color("#FFD740"), "bot": Color("#FFB300"), "glow": Color("#FFE57F")},
 	}
 	func _ready() -> void:
-		custom_minimum_size = Vector2(0, 64)
+		custom_minimum_size = Vector2(0, 54)
 	func _draw() -> void:
 		var tc: Dictionary = _TIER.get(tone, _TIER[3])
 		var h := size.y
@@ -1305,40 +1589,41 @@ class _TargetRow extends Control:
 		_fill_pill(Rect2(Vector2.ZERO, size), Color(tc.top.r, tc.top.g, tc.top.b, pill_a), 12.0)
 		if full:
 			_outline_pill(Rect2(Vector2.ZERO, size), Color(tc.glow.r, tc.glow.g, tc.glow.b, 0.3), 12.0, 1.5)
-		var br := 15.0
-		var bp := Vector2(26, 24)
-		draw_circle(bp, br + 4, Color(tc.top.r, tc.top.g, tc.top.b, 0.18))
-		_gradient_circle(bp, br, tc.top, tc.bot)
-		draw_arc(bp, br, 0, TAU, 24, tc.glow, 1.5, true)
-		draw_circle(bp + Vector2(-br * 0.25, -br * 0.28), br * 0.12, Color(1, 1, 1, 0.45))
 		var ns := badge
-		var nfs := 16 if ns.length() <= 2 else 11
+		var nfs := _fit_font(ns, 16, 10, 34.0)
 		var nw := _FONT.get_string_size(ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs)
 		var na := _FONT.get_ascent(nfs)
 		var nd := _FONT.get_descent(nfs)
-		draw_string(_FONT, bp + Vector2(-nw.x * 0.5, (na - nd) * 0.5), ns, HORIZONTAL_ALIGNMENT_CENTER, -1, nfs, Color.WHITE)
+		var badge_w := maxf(30.0, nw.x + 12.0)
+		var badge_rect := Rect2(Vector2(8, 10), Vector2(badge_w, 28))
+		_fill_pill(badge_rect.grow(4), Color(tc.top.r, tc.top.g, tc.top.b, 0.18), 16.0)
+		_fill_pill(badge_rect, Color(tc.top.r, tc.top.g, tc.top.b, 0.95), 14.0)
+		_outline_pill(badge_rect, tc.glow, 14.0, 1.5)
+		draw_circle(badge_rect.position + Vector2(8, 8), 2.0, Color(1, 1, 1, 0.42))
+		draw_string(_FONT, badge_rect.position + Vector2((badge_rect.size.x - nw.x) * 0.5, 14 + (na - nd) * 0.5), ns, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, Color.WHITE)
 		var pg := "%d/%d" % [done, total]
 		var pfs := 14
 		var pw := _FONT.get_string_size(pg, HORIZONTAL_ALIGNMENT_RIGHT, -1, pfs)
 		var pa := _FONT.get_ascent(pfs)
 		var pd := _FONT.get_descent(pfs)
 		var pc: Color = tc.glow if full else Color(1, 1, 1, 0.4)
-		draw_string(_FONT, Vector2(size.x - pw.x - 14, 25 + (pa - pd) * 0.5), pg, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, pc)
-		var tfs := 13
+		draw_string(_FONT, Vector2(size.x - pw.x - 10, 20 + (pa - pd) * 0.5), pg, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, pc)
+		var title_left := badge_rect.end.x + 10.0
+		var title_width := maxf(34.0, size.x - title_left - pw.x - 22.0)
+		var tfs := _fit_font(title, 13, 10, title_width)
 		var ta := _FONT.get_ascent(tfs)
 		var td := _FONT.get_descent(tfs)
 		var title_color := Color(1, 1, 1, 0.92) if full else Color(1, 1, 1, 0.72)
-		var title_width := maxf(44.0, size.x - 58.0 - pw.x - 28.0)
-		draw_string(_FONT, Vector2(58, 25 + (ta - td) * 0.5), title, HORIZONTAL_ALIGNMENT_LEFT, title_width, tfs, title_color)
-		var sr := 10.0
-		var available_left := 58.0
-		var available_width := maxf(40.0, size.x - available_left - 14.0)
-		var sp := 22.0
+		draw_string(_FONT, Vector2(title_left, 20 + (ta - td) * 0.5), title, HORIZONTAL_ALIGNMENT_LEFT, title_width, tfs, title_color)
+		var sr := 7.0
+		var available_left := title_left
+		var available_width := maxf(34.0, size.x - available_left - 10.0)
+		var sp := 17.0
 		if total > 1:
-			sp = minf(22.0, maxf(14.0, (available_width - sr * 2.0) / float(total - 1)))
+			sp = minf(17.0, maxf(10.0, (available_width - sr * 2.0) / float(total - 1)))
 		var pip_width := sr * 2.0 + float(maxi(total - 1, 0)) * sp
 		var pip_start := available_left + maxf(0.0, (available_width - pip_width) * 0.5) + sr
-		var pip_y := h - 16.0
+		var pip_y := h - 11.0
 		for i in total:
 			var c := Vector2(pip_start + float(i) * sp, pip_y)
 			var pts := _star_pts(c, sr)
@@ -1353,6 +1638,11 @@ class _TargetRow extends Control:
 				var ol := pts.duplicate()
 				ol.append(pts[0])
 				draw_polyline(ol, Color(1, 1, 1, 0.18), 1.5, true)
+	func _fit_font(text: String, start_size: int, min_size: int, max_width: float) -> int:
+		var fs := start_size
+		while fs > min_size and _FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > max_width:
+			fs -= 1
+		return fs
 	func _star_pts(center: Vector2, r: float) -> PackedVector2Array:
 		var pts := PackedVector2Array()
 		var ir := r * 0.42
